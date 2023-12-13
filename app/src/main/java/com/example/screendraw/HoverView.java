@@ -5,11 +5,8 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.util.Log;
-import android.view.SurfaceHolder;
 
-public class HoverView extends SurfaceView implements SurfaceHolder.Callback {
-
-    private boolean surfaceReady = false;
+public class HoverView extends SurfaceView {
 
     public HoverView(Context context) {
         super(context);
@@ -27,46 +24,51 @@ public class HoverView extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     private void init() {
-        getHolder().addCallback(this);
-        setFocusable(true);
-    }
-
-    @Override
-    public void surfaceCreated(SurfaceHolder holder) {
-        // The surface is created. Initialize drawing here.
-        surfaceReady = true;
-    }
-
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        // The surface size or format has changed
-        // Respond appropriately to surface changes, e.g., adjusting drawing parameters
-    }
-
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder) {
-        // The surface is being destroyed. Cleanup or release resources here.
-        surfaceReady = false;
+        // Perform initialization if needed
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        //Log.d("TAG", "Hofevent " + event.getAction());
+        int action = event.getActionMasked();
+        Log.d("TAG", "onTouchEvent");
 
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_MOVE:
+                float x = event.getX();
+                float y = event.getY();
+
+                // Now x and y contain the stylus position
+                // Use the position information as needed
+
+                break;
+            case MotionEvent.ACTION_UP:
+                // Handle touch release if needed
+                break;
+            // ... other cases for different touch events
+
+        }
+
+        return true; // indicate that the event has been handled
+    }
+
+    @Override
+    public boolean onHoverEvent(MotionEvent event) {
+        Log.d("TAG", "Hover enter event");
         switch (event.getAction()) {
             case MotionEvent.ACTION_HOVER_ENTER:
                 // Handle hover enter event
-                // Example: Log.d("CustomSurfaceView", "Hover enter event");
+                Log.d("CustomHoverView", "Hover enter event");
                 break;
             case MotionEvent.ACTION_HOVER_MOVE:
                 // Handle hover move event
-                // Example: Log.d("CustomSurfaceView", "Hover move event");
+                Log.d("CustomHoverView", "Hover move event");
                 break;
             case MotionEvent.ACTION_HOVER_EXIT:
                 // Handle hover exit event
-                // Example: Log.d("CustomSurfaceView", "Hover exit event");
+                Log.d("CustomHoverView", "Hover exit event");
                 break;
         }
-        return false;
+        return true;
     }
 }
