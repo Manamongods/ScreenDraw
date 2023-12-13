@@ -17,9 +17,10 @@ import android.os.Handler;
 import android.os.Looper;
 import java.net.Socket;
 import java.util.Objects;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class MainActivity extends AppCompatActivity {
-    float threshold = 0.05f;
+    float threshold = 0.15f;
 
     private static final String TAG = "Wi-Fi Direct Example";
     private WifiP2pManager wifiP2pManager;
@@ -65,12 +66,15 @@ public class MainActivity extends AppCompatActivity {
             }
             //Log.v("TAG", eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold)); // + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE)
             Data d = new Data();
-
             d.type = eventType;
             d.x = event.getX();
             d.y = event.getY();
             d.pressure = (pr - threshold);
-            toSend = d;
+            try {
+                toSend.put(d);
+            } catch (InterruptedException e) {
+                Log.d(TAG, "Wtf it failed idk??? " + e);
+            }
 
             return true;
         }
@@ -96,12 +100,9 @@ public class MainActivity extends AppCompatActivity {
         int type;
         float x,y,pressure;
     }
-
-    Data toSend;
+    LinkedBlockingQueue<Data> toSend = new LinkedBlockingQueue<Data>();
 
     private class Do implements Runnable {
-        Data sent;
-
         @Override
         public void run() {
             while(true) {
@@ -119,14 +120,14 @@ public class MainActivity extends AppCompatActivity {
 
                     //DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
                     while (socket.isConnected()) {
-                        if (!Objects.equals(toSend, sent)) {
+                        if (!toSend.isEmpty()) {
+                            Data ts = toSend.take();
                             //Log.d(TAG, "D");
-                            sent = toSend;
                             dataOutputStream.writeInt(478934687);
-                            dataOutputStream.writeInt(Integer.reverseBytes(toSend.type));
-                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(toSend.x)));
-                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(toSend.y)));
-                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(toSend.pressure)));
+                            dataOutputStream.writeInt(Integer.reverseBytes(ts.type));
+                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.x)));
+                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.y)));
+                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.pressure)));
                             dataOutputStream.flush();
                         }
                         //sleep

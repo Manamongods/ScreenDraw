@@ -54,51 +54,67 @@ namespace ScreenDrawDesktop
                     TcpListener server = new TcpListener(IPAddress.Any, 8987);
                     server.Start();
 
-                    Console.WriteLine("Waiting for Android client...");
-                    writer.Flush();
-
-                    int marker = 478934687;
-                    byte[] intBytes = BitConverter.GetBytes(marker);
-                    byte a = intBytes[3];
-                    byte b = intBytes[2];
-                    byte c = intBytes[1];
-                    byte d = intBytes[0];
-
-                    using (TcpClient client = server.AcceptTcpClient())
-                    using (NetworkStream stream = client.GetStream())
-                    using (BinaryReader reader = new BinaryReader(stream))
+                    try
                     {
-                        Console.WriteLine("???");
+                        Console.WriteLine("Waiting for Android client...");
                         writer.Flush();
-                        while (client.Connected)
+
+                        int marker = 478934687;
+                        byte[] intBytes = BitConverter.GetBytes(marker);
+                        byte a = intBytes[3];
+                        byte b = intBytes[2];
+                        byte c = intBytes[1];
+                        byte d = intBytes[0];
+
+                        using (TcpClient client = server.AcceptTcpClient())
+                        using (NetworkStream stream = client.GetStream())
+                        using (BinaryReader reader = new BinaryReader(stream))
                         {
-                            while (reader.ReadByte() != a || reader.ReadByte() != b || reader.ReadByte() != c || reader.ReadByte() != d)
-                            {
-                                //Console.WriteLine("Seeking!");
-                                writer.Flush();
-                            }
-
+                            Console.WriteLine("???");
                             writer.Flush();
+                            while (client.Connected)
+                            {
+                                if (stream.DataAvailable)
+                                {
+                                    int counter = 0;
+                                    while (reader.ReadByte() != a || reader.ReadByte() != b || reader.ReadByte() != c || reader.ReadByte() != d)
+                                    {
+                                        //Console.WriteLine("Seeking!");
+                                        //writer.Flush();
+                                        if (counter++ > 30)
+                                            throw new System.Exception("Too many!");
+                                    }
 
-                            int type = reader.ReadInt32();
-                            float x = reader.ReadSingle();
-                            float y = reader.ReadSingle();
-                            float pressure = reader.ReadSingle();
-                            //Console.WriteLine("Received: " + type + " " + x + " " + y + " " + pressure);
+                                    //writer.Flush();
 
-                            int xx = (int)x;
-                            int yy = (int)y;
+                                    int type = reader.ReadInt32();
+                                    float x = reader.ReadSingle();
+                                    float y = reader.ReadSingle();
+                                    float pressure = reader.ReadSingle();
+                                    //Console.WriteLine("Received: " + type + " " + x + " " + y + " " + pressure);
 
-                            System.Windows.Forms.Cursor.Position = new System.Drawing.Point(xx, yy);
+                                    int xx = (int)x;
+                                    int yy = (int)y;
 
-                            if (type == 1)
-                                mouse_event(MouseEventFlags.LeftDown, 0, 0, 0, 0);
-                            else if (type == 2)
-                                mouse_event(MouseEventFlags.LeftUp, 0, 0, 0, 0);
+                                    System.Windows.Forms.Cursor.Position = new System.Drawing.Point(xx, yy);
+
+                                    if (type == 1)
+                                        mouse_event(MouseEventFlags.LeftDown, 0, 0, 0, 0);
+                                    else if (type == 2)
+                                        mouse_event(MouseEventFlags.LeftUp, 0, 0, 0, 0);
+                                    System.Threading.Thread.Sleep(TimeSpan.FromTicks(1000));
+                                }
+                            }
                         }
                     }
-
-                    server.Stop();
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("Failed: " + e);
+                    }
+                    finally
+                    {
+                        server.Stop();
+                    }
                 }
             }
         }
