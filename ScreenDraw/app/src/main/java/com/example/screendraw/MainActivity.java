@@ -2,6 +2,7 @@ package com.example.screendraw;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 
 import android.hardware.usb.UsbManager;
@@ -25,12 +26,58 @@ import android.widget.Button;
 import android.view.InputDevice;
 
 public class MainActivity extends AppCompatActivity {
+    float threshold = 0.05f;
 
     private UsbManager usbManager;
     private UsbAccessory usbAccessory;
     private ParcelFileDescriptor fileDescriptor;
     private FileOutputStream outputStream;
 
+    boolean down = false;
+    View.OnTouchListener onTouchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            float pr = event.getPressure();
+
+            int action = event.getActionMasked();
+            String eventName = "M";
+            switch (action) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE:
+                    float x = event.getX();
+                    float y = event.getY();
+
+                    if (pr > threshold)
+                    {
+                        if (!down)
+                        {
+                            down = true;
+                            eventName = "D";
+                        }
+                    }
+                    else
+                    {
+                        if (down)
+                        {
+                            down = false;
+                            eventName = "U";
+                        }
+                    }
+
+                    break;
+                case MotionEvent.ACTION_UP:
+                    down = false;
+                    eventName = "U";
+                    break;
+            }
+            Log.v("TAG", eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold)); // + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE)
+            String dataToSend = eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold);
+            sendDataOverUsb(dataToSend);
+            return true;
+        }
+    };
+
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -40,41 +87,7 @@ public class MainActivity extends AppCompatActivity {
 
         HoverView surfaceView = findViewById(R.id.hoverView);
 
-        surfaceView.setOnHoverListener(new View.OnHoverListener() {
-            @Override
-            public boolean onHover(View v, MotionEvent event) {
-                // Handle hover input here
-                Log.v("TAG", "Hover - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + event.getPressure());
-                String dataToSend = "Hover - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + event.getPressure();
-                sendDataOverUsb(dataToSend);
-                return true;
-            }
-        });
-
-        surfaceView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                /*
-                InputDevice.MotionRange x =event.getDevice().getMotionRange(MotionEvent.AXIS_X);
-                InputDevice.MotionRange y =event.getDevice().getMotionRange(MotionEvent.AXIS_Y);
-                InputDevice.MotionRange z =event.getDevice().getMotionRange(MotionEvent.AXIS_DISTANCE);
-                Log.v("TAG", "X:" + x.getMin() + " " + x.getMax());
-                Log.v("TAG", "y:" + y.getMin() + " " + y.getMax());
-                Log.v("TAG", "z:" + z.getMin() + " " + z.getMax());
-                 */
-
-                // Handle touch input here
-                MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
-                event.getPointerCoords(0, coords);
-                Log.v("TAG", "IDK - X: " + coords.x + ", Y: " + coords.y + ", orientation: " + coords.orientation);
-
-                Log.v("TAG", "Touch - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + event.getPressure() + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE));
-                String dataToSend = "Touch - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + event.getPressure();
-                sendDataOverUsb(dataToSend);
-                return true;
-            }
-        });
-
+        surfaceView.setOnTouchListener(onTouchListener);
     }
 
     private void sendDataOverUsb(String data) {
