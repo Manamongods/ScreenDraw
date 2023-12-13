@@ -19,27 +19,32 @@ import java.io.IOException;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
-import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-
-import android.view.InputDevice;
-
 
 import android.content.Context;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbManager;
+import android.net.wifi.p2p.WifiP2pConfig;
+import android.net.wifi.p2p.WifiP2pDevice;
+import android.net.wifi.p2p.WifiP2pInfo;
+import android.net.wifi.p2p.WifiP2pManager;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
-
-import java.util.HashMap;
+import androidx.appcompat.app.AppCompatActivity;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Objects;
 
 public class MainActivity extends AppCompatActivity {
     float threshold = 0.05f;
 
-    private UsbManager usbManager;
-    private UsbAccessory usbAccessory;
-    private ParcelFileDescriptor fileDescriptor;
-    private FileOutputStream outputStream;
+    private static final String TAG = "Wi-Fi Direct Example";
+    private WifiP2pManager wifiP2pManager;
+    private WifiP2pManager.Channel channel;
+    private ServerSocket serverSocket;
+    private Handler handler = new Handler(Looper.getMainLooper());
 
     boolean down = false;
     View.OnTouchListener onTouchListener = new View.OnTouchListener() {
@@ -79,8 +84,8 @@ public class MainActivity extends AppCompatActivity {
                     break;
             }
             Log.v("TAG", eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold)); // + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE)
-            String dataToSend = eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold);
-            sendDataOverUsb(dataToSend);
+            toSend = eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold);
+
             return true;
         }
     };
@@ -91,39 +96,82 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        wifiP2pManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
+        channel = wifiP2pManager.initialize(this, getMainLooper(), null);
+
+        // Discover peers and initiate connection
+        discoverPeers();
 
         HoverView surfaceView = findViewById(R.id.hoverView);
-
         surfaceView.setOnTouchListener(onTouchListener);
-
-
-        Context context = surfaceView.getContext();
-
-        /*
-        UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-
-        if (usbManager != null) {
-            HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
-
-            Log.d("TAG", "IDK");
-            for (UsbDevice device : deviceList.values()) {
-                int vendorID = device.getVendorId();
-                int productID = device.getProductId();
-
-                Log.d("TAG", "Device found: Vendor ID (VID) = " + vendorID + ", Product ID (PID) = " + productID);
-            }
-        } else {
-            Log.e("TAG", "USB Manager is null.");
-        }
-         */
     }
 
-    private void sendDataOverUsb(String data) {
-        if (outputStream != null) {
+    private void discoverPeers() {
+        wifiP2pManager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "Discovery started successfully.");
+            }
+
+            @Override
+            public void onFailure(int reasonCode) {
+                Log.d(TAG, "Discovery failed. Reason: " + reasonCode);
+            }
+        });
+    }
+
+    private void connectToDevice(final WifiP2pDevice device) {
+        WifiP2pConfig config = new WifiP2pConfig();
+        config.deviceAddress = device.deviceAddress;
+
+        wifiP2pManager.connect(channel, config, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "Connection to " + device.deviceName + " initiated.");
+            }
+
+            @Override
+            public void onFailure(int reason) {
+                Log.d(TAG, "Connection to " + device.deviceName + " failed. Reason: " + reason);
+            }
+        });
+    }
+
+    private void startServerSocket() {
+        try {
+            serverSocket = new ServerSocket(8888);
+            new Thread(new ServerThread()).start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    String toSend;
+
+    private class ServerThread implements Runnable {
+        String sent;
+
+        @Override
+        public void run() {
             try {
-                byte[] buffer = data.getBytes();
-                outputStream.write(buffer);
+                Log.d(TAG, "ServerSocket started. Waiting for a client...");
+
+                Socket clientSocket = serverSocket.accept();
+                Log.d(TAG, "Client connected.");
+
+                OutputStream outputStream = clientSocket.getOutputStream();
+                while(true) {
+                    if (!Objects.equals(toSend, sent)) {
+                        sent = toSend;
+                        byte[] buffer = toSend.getBytes(); //String.valueOf(event.getX()+","+event.getY()+","+(pr - threshold))
+                        outputStream.write(buffer);
+                        outputStream.flush();
+                    }
+                }
+
+                //outputStream.close();
+                //clientSocket.close();
+                //serverSocket.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -133,38 +181,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-
-        UsbAccessory[] accessories = usbManager.getAccessoryList();
-        if (accessories != null) {
-            usbAccessory = accessories[0];
-            fileDescriptor = usbManager.openAccessory(usbAccessory);
-            if (fileDescriptor != null) {
-                FileDescriptor fd = fileDescriptor.getFileDescriptor();
-                outputStream = new FileOutputStream(fd);
-            }
-        }
+        startServerSocket();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        closeUsbAccessory();
-    }
-
-    private void closeUsbAccessory() {
         try {
-            if (outputStream != null) {
-                outputStream.close();
-            }
-            if (fileDescriptor != null) {
-                fileDescriptor.close();
+            if (serverSocket != null) {
+                serverSocket.close();
             }
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            usbAccessory = null;
-            fileDescriptor = null;
-            outputStream = null;
         }
     }
 }
