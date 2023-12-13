@@ -12,14 +12,10 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-
 using System.IO;
-
-using LibUsbDotNet;
-using LibUsbDotNet.LibUsb;
-using LibUsbDotNet.Info;
-using LibUsbDotNet.Descriptors;
-using LibUsbDotNet.Main;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace ScreenDrawDesktop
 {
@@ -28,75 +24,82 @@ namespace ScreenDrawDesktop
     /// </summary>
     public partial class MainWindow : Window
     {
-        static UsbDeviceFinder MyUsbFinder = new UsbDeviceFinder(0x18D1, 0x4EE2); // Replace with your device's vendor and product IDs
-        //static UsbDeviceFinder MyUsbFinder = new UsbDeviceFinder(0x18D1, 0x4EE2, 0x0404); // Replace with your device's vendor and product IDs
+        [DllImport("user32.dll")]
+        private static extern void mouse_event(MouseEventFlags dwFlags, int dx, int dy, uint dwData, int dwExtraInfo);
+
+        [Flags]
+        private enum MouseEventFlags
+        {
+            LeftDown = 0x00000002,
+            LeftUp = 0x00000004,
+            RightDown = 0x00000008,
+            RightUp = 0x00000010,
+            MiddleDown = 0x00000020,
+            MiddleUp = 0x00000040,
+            Wheel = 0x00000800,
+            Absolute = 0x00008000
+        }
 
         public MainWindow()
         {
-
             using (var writer = new StreamWriter("output.txt"))
             {
                 Console.SetOut(writer);
 
-                // Get a list of all connected USB devices
-                UsbRegDeviceList devices = UsbDevice.AllDevices.FindAll(MyUsbFinder);
-                //UsbRegDeviceList devices = UsbDevice.AllDevices.FindAll((e) => { return true; });
-
-                UsbDevice usbDevice = null;
-
-                foreach (UsbRegistry usbRegistry in devices)
-                {
-                    Console.WriteLine("Device Description: " + usbRegistry.FullName);
-
-                    usbDevice = usbRegistry.Device;
-
-                    // Get the USB device info to extract Vendor and Product IDs
-                    //UsbDevice usbDevice2 = usbRegistry.Device;
-
-                    // Get the Vendor and Product IDs (VID and PID)
-                    //Console.WriteLine("ManufacturerString: " + usbDevice2?.Info?.ManufacturerString);
-                    //Console.WriteLine("Product ID (PID): " + usbDevice2?.Info?.ProductString);
-                }
-
-                InitializeComponent();
-
-                ErrorCode ec = ErrorCode.None;
-
-                Console.WriteLine("Starting");
-
-                // Find the USB device
-                if(usbDevice == null)
-                usbDevice = UsbDevice.OpenUsbDevice(MyUsbFinder);
-                if (usbDevice == null)
-                {
-                    Console.WriteLine("Device not found.");
-                    return;
-                }
-
-                // Open endpoint for communication
-                UsbEndpointReader reader = usbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
-                byte[] readBuffer = new byte[1024];
-
                 while (true)
                 {
-                    int bytesRead;
-                    ec = reader.Read(readBuffer, 5000, out bytesRead);
+                    Console.WriteLine("Starting up");
+                    writer.Flush();
 
-                    if (ec != ErrorCode.None)
+                    TcpListener server = new TcpListener(IPAddress.Any, 8987);
+                    server.Start();
+
+                    Console.WriteLine("Waiting for Android client...");
+                    writer.Flush();
+
+                    int marker = 478934687;
+                    byte[] intBytes = BitConverter.GetBytes(marker);
+                    byte a = intBytes[3];
+                    byte b = intBytes[2];
+                    byte c = intBytes[1];
+                    byte d = intBytes[0];
+
+                    using (TcpClient client = server.AcceptTcpClient())
+                    using (NetworkStream stream = client.GetStream())
+                    using (BinaryReader reader = new BinaryReader(stream))
                     {
-                        Console.WriteLine("Error reading from device: " + ec);
-                        break;
+                        Console.WriteLine("???");
+                        writer.Flush();
+                        while (client.Connected)
+                        {
+                            while (reader.ReadByte() != a || reader.ReadByte() != b || reader.ReadByte() != c || reader.ReadByte() != d)
+                            {
+                                //Console.WriteLine("Seeking!");
+                                writer.Flush();
+                            }
+
+                            writer.Flush();
+
+                            int type = reader.ReadInt32();
+                            float x = reader.ReadSingle();
+                            float y = reader.ReadSingle();
+                            float pressure = reader.ReadSingle();
+                            //Console.WriteLine("Received: " + type + " " + x + " " + y + " " + pressure);
+
+                            int xx = (int)x;
+                            int yy = (int)y;
+
+                            System.Windows.Forms.Cursor.Position = new System.Drawing.Point(xx, yy);
+
+                            if (type == 1)
+                                mouse_event(MouseEventFlags.LeftDown, 0, 0, 0, 0);
+                            else if (type == 2)
+                                mouse_event(MouseEventFlags.LeftUp, 0, 0, 0, 0);
+                        }
                     }
 
-                    if (bytesRead > 0)
-                    {
-                        string receivedData = Encoding.ASCII.GetString(readBuffer, 0, bytesRead);
-                        Console.WriteLine("Received data: " + receivedData);
-                        // Process received data here
-                    }
+                    server.Stop();
                 }
-
-                usbDevice.Close();
             }
         }
     }

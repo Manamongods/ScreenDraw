@@ -20,5 +20,3 @@ D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\obj\Debug
 D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\obj\Debug\net5.0-windows\ref\ScreenDrawDesktop.dll
 D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\obj\Debug\net5.0-windows\ScreenDrawDesktop.pdb
 D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\obj\Debug\net5.0-windows\ScreenDrawDesktop.genruntimeconfig.cache
-D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\bin\Debug\net5.0-windows\LibUsbDotNet.LibUsbDotNet.dll
-D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\obj\Debug\net5.0-windows\ScreenDrawDesktop.csproj.CopyComplete

@@ -5,35 +5,16 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 
-import android.hardware.usb.UsbManager;
-import android.hardware.usb.UsbAccessory;
-import android.hardware.usb.UsbDeviceConnection;
 import java.io.OutputStream;
+import java.io.DataOutputStream;
 import android.content.Context;
 import android.view.MotionEvent;
-import android.view.SurfaceView;
 import android.view.View;
-import java.io.FileDescriptor;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import android.os.ParcelFileDescriptor;
-import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
-import android.content.Context;
-import android.net.wifi.p2p.WifiP2pConfig;
-import android.net.wifi.p2p.WifiP2pDevice;
-import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
-import androidx.appcompat.app.AppCompatActivity;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Objects;
 
@@ -43,7 +24,6 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "Wi-Fi Direct Example";
     private WifiP2pManager wifiP2pManager;
     private WifiP2pManager.Channel channel;
-    private ServerSocket serverSocket;
     private Handler handler = new Handler(Looper.getMainLooper());
 
     boolean down = false;
@@ -53,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
             float pr = event.getPressure();
 
             int action = event.getActionMasked();
-            String eventName = "M";
+            int eventType = 0;
             switch (action) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_MOVE:
@@ -65,7 +45,7 @@ public class MainActivity extends AppCompatActivity {
                         if (!down)
                         {
                             down = true;
-                            eventName = "D";
+                            eventType = 1;
                         }
                     }
                     else
@@ -73,18 +53,24 @@ public class MainActivity extends AppCompatActivity {
                         if (down)
                         {
                             down = false;
-                            eventName = "U";
+                            eventType = 2;
                         }
                     }
 
                     break;
                 case MotionEvent.ACTION_UP:
                     down = false;
-                    eventName = "U";
+                    eventType = 2;
                     break;
             }
-            Log.v("TAG", eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold)); // + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE)
-            toSend = eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold);
+            //Log.v("TAG", eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold)); // + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE)
+            Data d = new Data();
+
+            d.type = eventType;
+            d.x = event.getX();
+            d.y = event.getY();
+            d.pressure = (pr - threshold);
+            toSend = d;
 
             return true;
         }
@@ -99,81 +85,60 @@ public class MainActivity extends AppCompatActivity {
         wifiP2pManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
         channel = wifiP2pManager.initialize(this, getMainLooper(), null);
 
-        // Discover peers and initiate connection
-        discoverPeers();
+        new Thread(new Do()).start();
 
         HoverView surfaceView = findViewById(R.id.hoverView);
         surfaceView.setOnTouchListener(onTouchListener);
     }
 
-    private void discoverPeers() {
-        wifiP2pManager.discoverPeers(channel, new WifiP2pManager.ActionListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "Discovery started successfully.");
-            }
-
-            @Override
-            public void onFailure(int reasonCode) {
-                Log.d(TAG, "Discovery failed. Reason: " + reasonCode);
-            }
-        });
+    class Data
+    {
+        int type;
+        float x,y,pressure;
     }
 
-    private void connectToDevice(final WifiP2pDevice device) {
-        WifiP2pConfig config = new WifiP2pConfig();
-        config.deviceAddress = device.deviceAddress;
+    Data toSend;
 
-        wifiP2pManager.connect(channel, config, new WifiP2pManager.ActionListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "Connection to " + device.deviceName + " initiated.");
-            }
-
-            @Override
-            public void onFailure(int reason) {
-                Log.d(TAG, "Connection to " + device.deviceName + " failed. Reason: " + reason);
-            }
-        });
-    }
-
-    private void startServerSocket() {
-        try {
-            serverSocket = new ServerSocket(8888);
-            new Thread(new ServerThread()).start();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    String toSend;
-
-    private class ServerThread implements Runnable {
-        String sent;
+    private class Do implements Runnable {
+        Data sent;
 
         @Override
         public void run() {
-            try {
-                Log.d(TAG, "ServerSocket started. Waiting for a client...");
+            while(true) {
+                try {
+                    Log.d(TAG, "A");
 
-                Socket clientSocket = serverSocket.accept();
-                Log.d(TAG, "Client connected.");
+                    Socket socket = new Socket("***REMOVED***", 8987);
+                    Log.d(TAG, "B");
 
-                OutputStream outputStream = clientSocket.getOutputStream();
-                while(true) {
-                    if (!Objects.equals(toSend, sent)) {
-                        sent = toSend;
-                        byte[] buffer = toSend.getBytes(); //String.valueOf(event.getX()+","+event.getY()+","+(pr - threshold))
-                        outputStream.write(buffer);
-                        outputStream.flush();
+                    OutputStream outputStream = socket.getOutputStream();
+
+                    DataOutputStream dataOutputStream = new DataOutputStream(outputStream);
+
+                    Log.d(TAG, "C");
+
+                    //DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
+                    while (socket.isConnected()) {
+                        if (!Objects.equals(toSend, sent)) {
+                            //Log.d(TAG, "D");
+                            sent = toSend;
+                            dataOutputStream.writeInt(478934687);
+                            dataOutputStream.writeInt(Integer.reverseBytes(toSend.type));
+                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(toSend.x)));
+                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(toSend.y)));
+                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(toSend.pressure)));
+                            dataOutputStream.flush();
+                        }
+                        //sleep
                     }
-                }
 
-                //outputStream.close();
-                //clientSocket.close();
-                //serverSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
+                    Log.d(TAG, "E");
+
+                    outputStream.close();
+                    socket.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -181,18 +146,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        startServerSocket();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        try {
-            if (serverSocket != null) {
-                serverSocket.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 }

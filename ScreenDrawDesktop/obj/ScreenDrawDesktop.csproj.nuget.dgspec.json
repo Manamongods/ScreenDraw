@@ -40,12 +40,6 @@
       "frameworks": {
         "net5.0-windows7.0": {
           "targetAlias": "net5.0-windows",
-          "dependencies": {
-            "LibUsbDotNet": {
-              "target": "Package",
-              "version": "[2.2.29, )"
-            }
-          },
           "imports": [
             "net461",
             "net462",
@@ -60,7 +54,7 @@
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
             },
-            "Microsoft.WindowsDesktop.App.WPF": {
+            "Microsoft.WindowsDesktop.App": {
               "privateAssets": "none"
             }
           },
