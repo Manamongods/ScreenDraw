@@ -25,6 +25,14 @@ import android.widget.Button;
 
 import android.view.InputDevice;
 
+
+import android.content.Context;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import android.util.Log;
+
+import java.util.HashMap;
+
 public class MainActivity extends AppCompatActivity {
     float threshold = 0.05f;
 
@@ -88,6 +96,27 @@ public class MainActivity extends AppCompatActivity {
         HoverView surfaceView = findViewById(R.id.hoverView);
 
         surfaceView.setOnTouchListener(onTouchListener);
+
+
+        Context context = surfaceView.getContext();
+
+        /*
+        UsbManager usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+
+        if (usbManager != null) {
+            HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
+
+            Log.d("TAG", "IDK");
+            for (UsbDevice device : deviceList.values()) {
+                int vendorID = device.getVendorId();
+                int productID = device.getProductId();
+
+                Log.d("TAG", "Device found: Vendor ID (VID) = " + vendorID + ", Product ID (PID) = " + productID);
+            }
+        } else {
+            Log.e("TAG", "USB Manager is null.");
+        }
+         */
     }
 
     private void sendDataOverUsb(String data) {

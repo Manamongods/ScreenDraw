@@ -1,0 +1,8 @@
+{
+  "runtimeOptions": {
+    "additionalProbingPaths": [
+      "C:\\Users\\Precision Cats\\.dotnet\\store\\|arch|\\|tfm|",
+      "C:\\Users\\Precision Cats\\.nuget\\packages"
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+List of devices attached
+4758F12E	device
+emulator-5556	offline
+

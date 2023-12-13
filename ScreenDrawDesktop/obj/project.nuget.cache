@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "dgSpecHash": "8VxB7Qv9lH2Hzk6SmjgCHi9aWiP6387N1iUyw+35XiRGDELY/g4en7XAJAQdeM8Y5aTAaZz9LwdP/4ahsGynGg==",
+  "success": true,
+  "projectFilePath": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\ScreenDrawDesktop\\ScreenDrawDesktop.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Precision Cats\\.nuget\\packages\\libusbdotnet\\2.2.29\\libusbdotnet.2.2.29.nupkg.sha512",
+    "C:\\Users\\Precision Cats\\.nuget\\packages\\microsoft.netcore.platforms\\2.0.0\\microsoft.netcore.platforms.2.0.0.nupkg.sha512",
+    "C:\\Users\\Precision Cats\\.nuget\\packages\\microsoft.win32.registry\\4.5.0\\microsoft.win32.registry.4.5.0.nupkg.sha512",
+    "C:\\Users\\Precision Cats\\.nuget\\packages\\system.security.accesscontrol\\4.5.0\\system.security.accesscontrol.4.5.0.nupkg.sha512",
+    "C:\\Users\\Precision Cats\\.nuget\\packages\\system.security.principal.windows\\4.5.0\\system.security.principal.windows.4.5.0.nupkg.sha512"
+  ],
+  "logs": []
+}
