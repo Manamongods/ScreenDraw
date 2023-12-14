@@ -51,7 +51,7 @@ namespace ScreenDrawDesktop
         static uint MOUSEEVENTF_MOVE = 0x0001;
 
 
-        double radius = 20;
+        double radius = 5;
         const int MIN_POINTS = 10;
         int width = 3440;
         int height = 1440;
@@ -72,8 +72,8 @@ namespace ScreenDrawDesktop
 
             WindowStyle = WindowStyle.None; // Borderless window
             WindowState = WindowState.Maximized; // Maximize to cover the entire screen
-            //Topmost = true;
-            //Opacity = 0.5f;
+            Topmost = true;
+            Opacity = 0.5f;
             AllowsTransparency = true;
             IsHitTestVisible = false;
             Background = Brushes.Transparent;
@@ -85,7 +85,7 @@ namespace ScreenDrawDesktop
             renderTarget = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Default);
             renderTarget.Clear();
 
-            DrawingVisual drawingVisual = new DrawingVisual();
+             drawingVisual = new DrawingVisual();
             using (DrawingContext drawingContext = drawingVisual.RenderOpen())
             {
                 SolidColorBrush brush = Brushes.Red; // Choose your desired color
@@ -115,19 +115,22 @@ namespace ScreenDrawDesktop
             //newThread.Priority = ThreadPriority.Highest;
             //newThread.Start();
         }
+        DrawingVisual drawingVisual;
 
         protected override void OnSourceInitialized(EventArgs e)
         {
             IntPtr hWnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
             int extendedStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
             SetWindowLong(hWnd, GWL_EXSTYLE, extendedStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+
+            Task.Run(() =>
+            {
+            Run();
+            });
         }
 
         private void Run()
         {
-            return;
-            DrawingVisual drawingVisual = new DrawingVisual();
-
             using (var writer = new StreamWriter("output.txt"))
             {
                 Console.SetOut(writer);
@@ -189,16 +192,19 @@ namespace ScreenDrawDesktop
                                     //Console.WriteLine("Received: " + type + " " + x + " " + y + " " + pressure);
                                     //writer.Flush();
 
-                                    float dx = x - prevx;
-                                    float dy = y - prevy;
+                                    float dx = (x - prevx) * width;
+                                    float dy = (y - prevy) * height;
                                     float dist = MathF.Sqrt(dx * dx + dy * dy);
 
-                                    //const float minDist = 0.005f;
-                                    const float minDist = 0.0005f;
+                                    const float minDist = 5.0f;
                                     if (dist > minDist || !stream.DataAvailable || type != 0) // 
                                     {
                                         prevx = x;
                                         prevy = y;
+
+                                        points.Add(x * width);
+                                        points.Add(y * height);
+
                                         //x /= 2200;
                                         //y /= 1650;
                                         x *= 65535;
@@ -222,26 +228,28 @@ namespace ScreenDrawDesktop
                                             flags |= UP;
                                         mouse_event(flags, xx, yy, 0, 0);
 
-                                        points.Add(xx);
-                                        points.Add(yy);
-
-                                        System.Threading.Thread.Sleep(TimeSpan.FromTicks(1000));
+                                        Thread.Sleep(TimeSpan.FromTicks(1000));
                                     }
                                 }
                                 if (points.Count > MIN_POINTS * 2 || (points.Count > 0 && !stream.DataAvailable))
                                 {
-                                    using (DrawingContext drawingContext = drawingVisual.RenderOpen())
+                                    List<float> points2 = new(points);
+
+                                    Application.Current.Dispatcher.Invoke(() =>
                                     {
-                                        SolidColorBrush brush = Brushes.Red; // Choose your desired color
-
-                                        for (int i = 0; i < points.Count; i += 2)
+                                        using (DrawingContext drawingContext = drawingVisual.RenderOpen())
                                         {
-                                            drawingContext.DrawEllipse(brush, null, new Point(points[i], points[i + 1]), radius, radius);
+                                            SolidColorBrush brush = Brushes.Red; // Choose your desired color
+                                            for (int i = 0; i < points2.Count; i += 2)
+                                            {
+                                                //Console.WriteLine("Drawing: " + points2[i + 0] + ", " + points2[i + 1]);
+                                                drawingContext.DrawEllipse(brush, null, new Point(points2[i + 0], points2[i + 1]), radius, radius);
+                                            }
+                                            points2.Clear();
                                         }
-                                        points.Clear();
-                                    }
 
-                                    renderTarget.Render(drawingVisual);
+                                        renderTarget.Render(drawingVisual);
+                                    });
                                 }
                             }
                         }
