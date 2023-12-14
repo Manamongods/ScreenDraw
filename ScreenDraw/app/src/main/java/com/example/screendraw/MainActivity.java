@@ -27,53 +27,100 @@ public class MainActivity extends AppCompatActivity {
     private WifiP2pManager.Channel channel;
     private Handler handler = new Handler(Looper.getMainLooper());
 
+    private float startX, startY;
+
     boolean down = false;
     View.OnTouchListener onTouchListener = new View.OnTouchListener() {
         @Override
         public boolean onTouch(View v, MotionEvent event) {
-            float pr = event.getPressure();
+            int toolType = event.getToolType(0);
+            boolean erase = false;
+            if (toolType == MotionEvent.TOOL_TYPE_STYLUS)
+                erase = false;
+            else if (toolType == MotionEvent.TOOL_TYPE_ERASER)
+                erase = true;
+            else if (toolType == MotionEvent.TOOL_TYPE_FINGER)
+                return true;
 
-            int action = event.getActionMasked();
-            int eventType = 0;
-            switch (action) {
-                case MotionEvent.ACTION_DOWN:
+            int pointerIndex = event.getActionIndex();
+            int viewWidth = v.getWidth();
+            int viewHeight = v.getHeight();
+
+            switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_MOVE:
-                    float x = event.getX();
-                    float y = event.getY();
-
-                    if (pr > threshold)
-                    {
-                        if (!down)
-                        {
-                            down = true;
-                            eventType = 1;
+                    int historySize = event.getHistorySize(); // Get the history size
+                    for (int i = 0; i < historySize; i++) {
+                        Data d = new Data();
+                        d.x = event.getHistoricalX(pointerIndex, i) / viewWidth;
+                        d.y = event.getHistoricalY(pointerIndex, i) / viewHeight;
+                        /*
+                        float dx = d.x-startX;
+                        float dy = d.y-startY;
+                        float dist = (float)Math.sqrt(dx*dx+dy*dy);
+                        if (dist < 0.01) //d.x == startX && d.y == startY)
+                            continue; //????????????????????????????????????
+                         */
+                        d.type = 0;
+                        float pr = event.getHistoricalPressure(pointerIndex, i);
+                        if (pr > threshold) {
+                            if (!down) {
+                                startX = d.x;
+                                startY = d.y;
+                                down = true;
+                                d.type = 1;
+                            }
+                        } else {
+                            if (down) {
+                                down = false;
+                                d.type = 2;
+                            }
+                        }
+                        if (erase)
+                            d.type = -d.type;
+                        d.pressure = (pr - threshold);
+                        try {
+                            toSend.put(d);
+                        } catch (InterruptedException e) {
+                            Log.d(TAG, "Wtf it failed idk??? " + e);
                         }
                     }
-                    else
-                    {
-                        if (down)
-                        {
-                            down = false;
-                            eventType = 2;
-                        }
-                    }
-
-                    break;
                 case MotionEvent.ACTION_UP:
-                    down = false;
-                    eventType = 2;
+                case MotionEvent.ACTION_DOWN:
+                    Data d = new Data();
+                    d.x = event.getX() / viewWidth;
+                    d.y = event.getY() / viewHeight;
+                    float pr = event.getPressure();
+                    if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                        d.type = 2;
+                        startX = -1000000;
+                        startY = -1000000;
+                    } else {
+                        d.type = 0;
+                        if (pr > threshold) {
+                            if (!down) {
+                                startX = d.x;
+                                startY = d.y;
+                                down = true;
+                                d.type = 1;
+                            }
+                        } else {
+                            if (down) {
+                                down = false;
+                                d.type = 2;
+                            }
+                        }
+                    }
+                    if (erase)
+                        d.type = -d.type;
+                    d.pressure = (pr - threshold);
+                    try {
+                        toSend.put(d);
+                    } catch (InterruptedException e) {
+                        Log.d(TAG, "Wtf it failed idk??? " + e);
+                    }
                     break;
-            }
-            //Log.v("TAG", eventName + " - X: " + event.getX() + ", Y: " + event.getY() + ", Pressure: " + (pr - threshold)); // + " DISTANCE: " + event.getAxisValue(MotionEvent.AXIS_DISTANCE)
-            Data d = new Data();
-            d.type = eventType;
-            d.x = event.getX();
-            d.y = event.getY();
-            d.pressure = (pr - threshold);
-            try {
-                toSend.put(d);
-            } catch (InterruptedException e) {
-                Log.d(TAG, "Wtf it failed idk??? " + e);
+                default:
+                    break;
             }
 
             return true;
@@ -89,7 +136,9 @@ public class MainActivity extends AppCompatActivity {
         wifiP2pManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
         channel = wifiP2pManager.initialize(this, getMainLooper(), null);
 
-        new Thread(new Do()).start();
+        Thread t = new Thread(new Do());
+        t.setPriority(10);
+        t.start();
 
         HoverView surfaceView = findViewById(R.id.hoverView);
         surfaceView.setOnTouchListener(onTouchListener);
@@ -103,6 +152,10 @@ public class MainActivity extends AppCompatActivity {
     LinkedBlockingQueue<Data> toSend = new LinkedBlockingQueue<Data>();
 
     private class Do implements Runnable {
+        float prevx = 0, prevy = 0;
+        float average = 0;
+        int counter = 0;
+
         @Override
         public void run() {
             while(true) {
@@ -121,13 +174,30 @@ public class MainActivity extends AppCompatActivity {
                     //DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
                     while (socket.isConnected()) {
                         if (!toSend.isEmpty()) {
-                            Data ts = toSend.take();
-                            //Log.d(TAG, "D");
-                            dataOutputStream.writeInt(478934687);
-                            dataOutputStream.writeInt(Integer.reverseBytes(ts.type));
-                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.x)));
-                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.y)));
-                            dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.pressure)));
+                            while(true) {
+                                Data ts = toSend.poll();
+                                if (ts == null)
+                                    break;
+                                //Log.d(TAG, "D");
+                                dataOutputStream.writeInt(478934687);
+                                dataOutputStream.writeInt(Integer.reverseBytes(ts.type));
+                                dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.x)));
+                                dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.y)));
+                                dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.pressure)));
+
+                                float dx = ts.x-prevx;
+                                float dy = ts.y-prevy;
+                                prevx = ts.x;
+                                prevy = ts.y;
+                                float move = (float)Math.sqrt(dx*dx+dy*dy);
+                                float lerp = 0.025f;
+                                average = (1.0f - lerp) * average + lerp * move;
+                                if (counter++ >= 100)
+                                {
+                                    counter = 0;
+                                    Log.d(TAG, "Smoothness is: " + (1.0f / average));
+                                }
+                            }
                             dataOutputStream.flush();
                         }
                         //sleep
