@@ -75,22 +75,12 @@ namespace ScreenDrawDesktop
             //Topmost = true;
             //Opacity = 0.5f;
             AllowsTransparency = true;
-            //IsHitTestVisible = false;
+            IsHitTestVisible = false;
             Background = Brushes.Transparent;
             InputBindings.Clear();
             //IsEnabled = false;
 
             Focusable = false;
-
-            //IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-            //int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            //SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
-            //SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TRANSPARENT);
-
-            IntPtr hWnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-            int extendedStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
-            SetWindowLong(hWnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT);
-
 
             renderTarget = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Default);
             renderTarget.Clear();
@@ -101,10 +91,10 @@ namespace ScreenDrawDesktop
                 SolidColorBrush brush = Brushes.Red; // Choose your desired color
                 double centerX = width / 2;
                 double centerY = height / 2;
-                drawingContext.DrawEllipse(brush, null, new Point(centerX, centerY), width / 2, height / 2);
+                drawingContext.DrawEllipse(brush, null, new Point(centerX, centerY), width / 6, height / 6);
             }
             renderTarget.Render(drawingVisual);
-            
+
             // Use the renderTarget (RenderTargetBitmap) as a texture or source
             Image image = new Image { Source = renderTarget };
             image.Stretch = Stretch.Fill;
@@ -116,7 +106,7 @@ namespace ScreenDrawDesktop
             image.Focusable = false;
             image.AllowDrop = false;
             image.InputBindings.Clear();
-            image.InputScope = null ;
+            image.InputScope = null;
 
             //Canvas.SetLeft(image, 0);
             //Canvas.SetTop(image, 0);
@@ -124,6 +114,13 @@ namespace ScreenDrawDesktop
             //Thread newThread = new Thread(Run);
             //newThread.Priority = ThreadPriority.Highest;
             //newThread.Start();
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            IntPtr hWnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            int extendedStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+            SetWindowLong(hWnd, GWL_EXSTYLE, extendedStyle | WS_EX_LAYERED | WS_EX_TRANSPARENT);
         }
 
         private void Run()
