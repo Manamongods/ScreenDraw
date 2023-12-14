@@ -20,14 +20,11 @@ import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class MainActivity extends AppCompatActivity {
-    float threshold = 0.15f;
 
     private static final String TAG = "Wi-Fi Direct Example";
     private WifiP2pManager wifiP2pManager;
     private WifiP2pManager.Channel channel;
     private Handler handler = new Handler(Looper.getMainLooper());
-
-    private float startX, startY;
 
     boolean down = false;
     View.OnTouchListener onTouchListener = new View.OnTouchListener() {
@@ -53,66 +50,25 @@ public class MainActivity extends AppCompatActivity {
                         Data d = new Data();
                         d.x = event.getHistoricalX(pointerIndex, i) / viewWidth;
                         d.y = event.getHistoricalY(pointerIndex, i) / viewHeight;
-                        /*
-                        float dx = d.x-startX;
-                        float dy = d.y-startY;
-                        float dist = (float)Math.sqrt(dx*dx+dy*dy);
-                        if (dist < 0.01) //d.x == startX && d.y == startY)
-                            continue; //????????????????????????????????????
-                         */
-                        d.type = 0;
-                        float pr = event.getHistoricalPressure(pointerIndex, i);
-                        if (pr > threshold) {
-                            if (!down) {
-                                startX = d.x;
-                                startY = d.y;
-                                down = true;
-                                d.type = 1;
-                            }
-                        } else {
-                            if (down) {
-                                down = false;
-                                d.type = 2;
-                            }
-                        }
-                        if (erase)
-                            d.type = -d.type;
-                        d.pressure = (pr - threshold);
+                        d.type = erase ? 2 : 1;
+                        d.pressure = event.getHistoricalPressure(pointerIndex, i);
                         try {
                             toSend.put(d);
                         } catch (InterruptedException e) {
                             Log.d(TAG, "Wtf it failed idk??? " + e);
                         }
                     }
+                    // (Note there's no break; here)
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_DOWN:
                     Data d = new Data();
                     d.x = event.getX() / viewWidth;
                     d.y = event.getY() / viewHeight;
-                    float pr = event.getPressure();
-                    if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                        d.type = 2;
-                        startX = -1000000;
-                        startY = -1000000;
-                    } else {
+                    if (event.getActionMasked() == MotionEvent.ACTION_UP)
                         d.type = 0;
-                        if (pr > threshold) {
-                            if (!down) {
-                                startX = d.x;
-                                startY = d.y;
-                                down = true;
-                                d.type = 1;
-                            }
-                        } else {
-                            if (down) {
-                                down = false;
-                                d.type = 2;
-                            }
-                        }
-                    }
-                    if (erase)
-                        d.type = -d.type;
-                    d.pressure = (pr - threshold);
+                    else
+                        d.type = erase ? 2 : 1;
+                    d.pressure = event.getPressure();
                     try {
                         toSend.put(d);
                     } catch (InterruptedException e) {
@@ -142,6 +98,12 @@ public class MainActivity extends AppCompatActivity {
 
         HoverView surfaceView = findViewById(R.id.hoverView);
         surfaceView.setOnTouchListener(onTouchListener);
+
+        View decorView = getWindow().getDecorView();
+        int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+        decorView.setSystemUiVisibility(uiOptions);
     }
 
     class Data

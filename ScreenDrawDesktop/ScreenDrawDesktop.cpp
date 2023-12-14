@@ -13,12 +13,26 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <mutex>
 
 int WIDTH = 3440;
 int HEIGHT = 1440;
-const float drawSize = 5.0f;
+const float drawSize0 = 4.0f;
+const float drawSize1 = 4.0f;
 const float eraseSize = 200.0f;
 //#define CLICK_MOUSE
+float downThreshold = 0.45f;
+float upThreshold = 0.25f;
+
+int drawColorID = 0;
+#define DRAW_COLOR_COUNT 3
+DirectX::XMFLOAT4 drawColors[DRAW_COLOR_COUNT]
+{
+	{1.0f,0.0f,0.0f,1.0f},
+	{0.0f,1.0f,0.0f,1.0f},
+	{0.0f,0.0f,1.0f,1.0f},
+};
 
 struct Vertex
 {
@@ -76,7 +90,6 @@ void InitDirectX(HWND hWnd)
 	vp.TopLeftY = 0;
 	g_pd3dDeviceContext->RSSetViewports(1, &vp);
 
-	//float ClearColor[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
 	float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
 }
@@ -111,8 +124,16 @@ ID3D11InputLayout* pInputLayout = NULL;
 ID3D11RasterizerState* pRasterizerState = NULL;
 ID3D11DepthStencilState* pDepthStencilState = NULL;
 
+#define INPUT_UP 0
+#define INPUT_DRAW 1
+#define INPUT_ERASE 2
+#define CONTINUE 0
+#define DOWN 1
+#define UP 2
+
 float prevx, prevy;
-void RenderLines(std::vector<DirectX::XMFLOAT3>& positions)
+bool erasing;
+void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 {
 	if (positions.size() == 0)
 		return;
@@ -122,20 +143,13 @@ void RenderLines(std::vector<DirectX::XMFLOAT3>& positions)
 	float IW = 1.0f / WIDTH;
 	float IH = 1.0f / HEIGHT;
 
-	static bool erasing = false;
-
 	std::vector<Vertex> vertices;
 	for (const auto& pos : positions)
 	{
 		float x = pos.x * 2.0f - 1.0f;
 		float y = -(pos.y * 2.0f - 1.0f);
 
-		if (pos.z < 0.0f)
-			erasing = true;
-		else if (pos.z > 0.0f)
-			erasing = false;
-
-		if (pos.z != (float)1 && pos.z != (float)-1)
+		if (pos.z != (float)DOWN)
 		{
 			float s;
 			DirectX::XMFLOAT4 color{ 0.0f, 0.0f, 0.0f, 0.0f };
@@ -145,8 +159,9 @@ void RenderLines(std::vector<DirectX::XMFLOAT3>& positions)
 			}
 			else
 			{
-				s = drawSize;
-				color = { 1.0f, 1.0f, 1.0f, 1.0f };
+				float t = pos.w;
+				s = drawSize0 * (1.0f - t) + drawSize1 * t;
+				color = drawColors[drawColorID];
 			}
 
 			float dirx = x - prevx;
@@ -227,80 +242,78 @@ void RenderLines(std::vector<DirectX::XMFLOAT3>& positions)
 	pVertexBuffer->Release();
 }
 
-int Update()
+std::mutex mutex;
+std::vector<char> data;
+
+bool clear = false;
+void Update()
 {
+	if (clear)
+	{
+		clear = false;
+		float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
+		g_pSwapChain->Present(1, 0);
+	}
 	//std::cerr << "Update" << std::endl;
 
-	if (clientSocket == NULL)
-	{
-		std::cout << "Waiting for incoming connections..." << std::endl;
-
-		clientSocket = accept(listenSocket, NULL, NULL);
-		if (clientSocket == INVALID_SOCKET)
-		{
-			std::cerr << "Accept failed with error: " << WSAGetLastError() << std::endl;
-			clientSocket = NULL;
-			return 1;
-		}
-
-		std::cout << "Client connected!" << std::endl;
-	}
-
-	constexpr int hack = 3;
-	char recvBuffer[5 * 4 * 16 + hack]; // 1024];
-	int recvResult;
-	recvResult = recv(clientSocket, recvBuffer, sizeof(recvBuffer) - hack, 0);
-	if (recvResult > 0)
+	if (data.size() > 0)
 	{
 		//std::cout << "Received: " << std::string(recvBuffer, recvResult) << std::endl;
 
-		std::vector<DirectX::XMFLOAT3> points;
+		std::vector<DirectX::XMFLOAT4> points;
 
+		mutex.lock();
 		int loc = 0;
-		while (loc < recvResult && *((int*)(recvBuffer + loc)) != 478934687)
+		while (loc < ((int)data.size() - 3) && (*((int*)(data.data() + loc)) != 478934687))
 			loc++;
-		recvResult -= 5 * 4 - 1;
-
-		while (loc < recvResult)
+		while (loc < (int)data.size() - 5 * 4 + 1)
 		{
-			char* b = recvBuffer + loc;
-			int type = *((int*)b + 1);
+			char* b = data.data() + loc;
+			int inputType = *((int*)b + 1);
 			float x = *((float*)b + 2);
 			float y = *((float*)b + 3);
 			float pressure = *((float*)b + 4);
 
-			/*static bool down = false;
-			if (type == 2)
-				down = false;
+			int type = CONTINUE;
+			static bool down = false;
+			if (inputType == INPUT_UP)
+			{
+				if (down)
+				{
+					down = false;
+					type = UP;
+				}
+			}
 			else
 			{
-				if (pressure > 0.0f)
+				if (down)
 				{
-					if (!down)
+					if (pressure < upThreshold)
 					{
-						down = true;
-						type = 1;
+						down = false;
+						type = UP;
 					}
 				}
 				else
 				{
-					if (down)
+					if (pressure > downThreshold)
 					{
-						down = false;
-						type = 2;
+						down = true;
+						type = DOWN;
 					}
 				}
-			}*/
+			}
 
-			if (type != 0 || pressure > 0.0f)
-				points.push_back({ x, y, (float)type });
+			if (inputType == INPUT_ERASE)
+				erasing = true;
+			else if (inputType == INPUT_DRAW)
+				erasing = false;
+
+			if (type != CONTINUE || down)
+				points.push_back({ x, y, (float)type, pressure });
 
 			//std::cerr << type << " - Point: " << x << ", " << y << ", pressure: " << pressure << std::endl;
-
-			if (type < 0)
-			{
-				type = -type;
-			}
 
 			static float prevx, prevy;
 			float dx = (x - prevx) * WIDTH;
@@ -310,7 +323,7 @@ int Update()
 			loc += 5 * 4;
 
 			const float minDist = 3.0f;
-			if (dist > minDist || loc >= recvResult || type != 0) // 
+			if (dist > minDist || loc >= data.size() || type != 0) // 
 			{
 				prevx = x;
 				prevy = y;
@@ -332,28 +345,60 @@ int Update()
 				//System.Threading.Thread.Sleep(TimeSpan.FromTicks(1000));
 			}
 		}
+		data.clear();
+		mutex.unlock();
 
 		if (points.size() > 0)
 		{
 			RenderLines(points);
 		}
-	}
-	else if (recvResult == 0)
-	{
-		std::cout << "Connection closed by peer." << std::endl;
-		return 2;
-	}
-	else
-	{
-		std::cerr << "Receive failed with error: " << WSAGetLastError() << std::endl;
-		return 3;
-	}
 
-	//std::cout << "Present1" << std::endl;
-	g_pSwapChain->Present(1, 0);
-	//std::cout << "Present2" << std::endl;
+		g_pSwapChain->Present(1, 0);
+	}
+}
 
-	return 0;
+bool running = true;
+void Receive()
+{
+	while (running)
+	{
+		if (clientSocket == NULL)
+		{
+			std::cout << "Waiting for incoming connections..." << std::endl;
+
+			clientSocket = accept(listenSocket, NULL, NULL);
+			if (clientSocket == INVALID_SOCKET)
+			{
+				std::cerr << "Accept failed with error: " << WSAGetLastError() << std::endl;
+				clientSocket = NULL;
+				continue;
+			}
+
+			std::cout << "Client connected!" << std::endl;
+		}
+
+		char recvBuffer[5 * 4 * 16];
+		int recvResult;
+		recvResult = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+		if (recvResult > 0)
+		{
+			mutex.lock();
+			int c = data.size();
+			data.resize(c + recvResult);
+			memcpy(data.data() + c, recvBuffer, recvResult);
+			mutex.unlock();
+		}
+		else if (recvResult == 0)
+		{
+			std::cout << "Connection closed by peer." << std::endl;
+			continue;
+		}
+		else
+		{
+			std::cerr << "Receive failed with error: " << WSAGetLastError() << std::endl;
+			continue;
+		}
+	}
 }
 
 #define MAX_LOADSTRING 100
@@ -368,6 +413,28 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+
+HHOOK keyboardHook;
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+	if (nCode < 0)
+		return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
+	if (nCode == HC_ACTION)
+	{
+		// Check for key events here
+		KBDLLHOOKSTRUCT* pKeyInfo = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYDOWN)
+		{
+			clear = true;
+		}
+		if (pKeyInfo->vkCode == 'E' && wParam == WM_KEYDOWN)
+		{
+			drawColorID++;
+			drawColorID = drawColorID % DRAW_COLOR_COUNT;
+		}
+	}
+	return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
+}
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
@@ -403,7 +470,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	if (result != 0) {
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return 1;
-	}
+}
 
 	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSocket == INVALID_SOCKET) {
@@ -431,12 +498,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		return 1;
 	}
 
+	keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, nullptr, 0);
 
 	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SCREENDRAWDESKTOP));
 
 	MSG msg;
 
 	g_pSwapChain->Present(1, 0);
+
+
+	std::thread receiveThread(Receive);
 
 
 	ID3DBlob* pErrorBlob = nullptr;
@@ -498,7 +569,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 
 	// Main message loop:
-	while (true) //GetMessage(&msg, nullptr, 0, 0))
+	while (GetMessage(&msg, nullptr, 0, 0))
 	{
 		try
 		{
@@ -511,10 +582,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 		//if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 		//{
-		//	TranslateMessage(&msg);
-		//	DispatchMessage(&msg);
+			//TranslateMessage(&msg);
+			//DispatchMessage(&msg);
 		//}
 	}
+
+	running = false;
 
 	std::cerr << "Ending?" << std::endl;
 
@@ -615,23 +688,30 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		//    // Return HTTRANSPARENT for the regions you want to be click-through
 		//    return HTTRANSPARENT;
 
-		case WM_COMMAND:
-		{
-			int wmId = LOWORD(wParam);
-			// Parse the menu selections:
-			switch (wmId)
-			{
-				case IDM_ABOUT:
-					DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-					break;
-				case IDM_EXIT:
-					DestroyWindow(hWnd);
-					break;
-				default:
-					return DefWindowProc(hWnd, message, wParam, lParam);
-			}
-		}
-		break;
+		//case WM_KEYDOWN:
+		//	if (wParam == VK_LEFT)
+		//	{
+		//	}
+		//	break;
+
+		//case WM_COMMAND:
+		//{
+		//	int wmId = LOWORD(wParam);
+		//	// Parse the menu selections:
+		//	switch (wmId)
+		//	{
+		//		case IDM_ABOUT:
+		//			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+		//			break;
+		//		case IDM_EXIT:
+		//			DestroyWindow(hWnd);
+		//			break;
+		//		default:
+		//			return DefWindowProc(hWnd, message, wParam, lParam);
+		//	}
+		//}
+		//break;
+		// 
 		//case WM_PAINT:
 		//{
 		//	PAINTSTRUCT ps;
@@ -640,6 +720,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		//	EndPaint(hWnd, &ps);
 		//}
 		//break;
+
 		case WM_DESTROY:
 			PostQuitMessage(0);
 			break;
