@@ -1,2 +1,13 @@
-﻿  ScreenDrawDesktop.cpp
-  ScreenDrawDesktop.vcxproj -> D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\Debug\ScreenDrawDesktop.exe
+﻿ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol _D3D11CreateDeviceAndSwapChain@48 referenced in function "void __cdecl InitDirectX(struct HWND__ *)" (?InitDirectX@@YAXPAUHWND__@@@Z)
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__accept@12 referenced in function "int __cdecl Update(void)" (?Update@@YAHXZ)
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__bind@12 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__closesocket@4 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__htonl@4 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__htons@4 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__listen@8 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__recv@16 referenced in function "int __cdecl Update(void)" (?Update@@YAHXZ)
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__socket@12 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__WSAStartup@8 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__WSACleanup@0 referenced in function _wWinMain@16
+ScreenDrawDesktop.obj : error LNK2019: unresolved external symbol __imp__WSAGetLastError@0 referenced in function "int __cdecl Update(void)" (?Update@@YAHXZ)
+D:\Precision Cats\Sync\#Assets or Github#\ScreenDraw\ScreenDrawDesktop\Debug\ScreenDrawDesktop.exe : fatal error LNK1120: 12 unresolved externals

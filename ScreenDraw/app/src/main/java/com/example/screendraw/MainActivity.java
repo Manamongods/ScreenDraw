@@ -179,7 +179,7 @@ public class MainActivity extends AppCompatActivity {
                                 if (ts == null)
                                     break;
                                 //Log.d(TAG, "D");
-                                dataOutputStream.writeInt(478934687);
+                                dataOutputStream.writeInt(Integer.reverseBytes(478934687));
                                 dataOutputStream.writeInt(Integer.reverseBytes(ts.type));
                                 dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.x)));
                                 dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.y)));
