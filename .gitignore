@@ -16,3 +16,10 @@ local.properties
 */.vs/
 *.tlog
 */x64
+ScreenDrawDesktop/ScreenDraw.log
+*/bin/
+.dll
+.cache
+.pdb
+.lref
+

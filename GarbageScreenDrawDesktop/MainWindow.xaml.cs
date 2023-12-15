@@ -26,24 +26,7 @@ namespace ScreenDrawDesktop
     public partial class MainWindow : Window
     {
         [DllImport("user32.dll")]
-        //private static extern void mouse_event(MouseEventFlags dwFlags, int dx, int dy, uint dwData, int dwExtraInfo);
         private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, int dwExtraInfo);
-
-        //[DllImport("user32.dll")]
-        //static extern bool SetCursorPos(int X, int Y);
-
-        //[Flags]
-        //private enum MouseEventFlags
-        //{
-        //    LeftDown = 0x00000002,
-        //    LeftUp = 0x00000004,
-        //    RightDown = 0x00000008,
-        //    RightUp = 0x00000010,
-        //    MiddleDown = 0x00000020,
-        //    MiddleUp = 0x00000040,
-        //    Wheel = 0x00000800,
-        //    Absolute = 0x00008000
-        //}
 
         static uint DOWN = 0x0002;
         static uint UP = 0x0004;
@@ -70,36 +53,32 @@ namespace ScreenDrawDesktop
         {
             InitializeComponent();
 
-            WindowStyle = WindowStyle.None; // Borderless window
-            WindowState = WindowState.Maximized; // Maximize to cover the entire screen
+            WindowStyle = WindowStyle.None;
+            WindowState = WindowState.Maximized;
             Topmost = true;
             Opacity = 0.5f;
             AllowsTransparency = true;
             IsHitTestVisible = false;
             Background = Brushes.Transparent;
             InputBindings.Clear();
-            //IsEnabled = false;
 
             Focusable = false;
 
             renderTarget = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Default);
             renderTarget.Clear();
 
-             drawingVisual = new DrawingVisual();
-            using (DrawingContext drawingContext = drawingVisual.RenderOpen())
-            {
-                SolidColorBrush brush = Brushes.Red; // Choose your desired color
-                double centerX = width / 2;
-                double centerY = height / 2;
-                drawingContext.DrawEllipse(brush, null, new Point(centerX, centerY), width / 6, height / 6);
-            }
-            renderTarget.Render(drawingVisual);
+            drawingVisual = new DrawingVisual();
+            //using (DrawingContext drawingContext = drawingVisual.RenderOpen())
+            //{
+            //    SolidColorBrush brush = Brushes.Red;
+            //    double centerX = width / 2;
+            //    double centerY = height / 2;
+            //    drawingContext.DrawEllipse(brush, null, new Point(centerX, centerY), width / 6, height / 6);
+            //}
+            //renderTarget.Render(drawingVisual);
 
-            // Use the renderTarget (RenderTargetBitmap) as a texture or source
             Image image = new Image { Source = renderTarget };
             image.Stretch = Stretch.Fill;
-            //image.Width = width;
-            //image.Height = height;
             Content = image;
             image.Opacity = 1;
             image.IsHitTestVisible = false;
@@ -107,13 +86,6 @@ namespace ScreenDrawDesktop
             image.AllowDrop = false;
             image.InputBindings.Clear();
             image.InputScope = null;
-
-            //Canvas.SetLeft(image, 0);
-            //Canvas.SetTop(image, 0);
-
-            //Thread newThread = new Thread(Run);
-            //newThread.Priority = ThreadPriority.Highest;
-            //newThread.Start();
         }
         DrawingVisual drawingVisual;
 
@@ -125,10 +97,11 @@ namespace ScreenDrawDesktop
 
             Task.Run(() =>
             {
-            Run();
+                Run();
             });
         }
 
+        private static bool down = false;
         private void Run()
         {
             using (var writer = new StreamWriter("output.txt"))
@@ -140,7 +113,6 @@ namespace ScreenDrawDesktop
                     Console.WriteLine("Starting up");
                     writer.Flush();
 
-                    //TcpListener server = new TcpListener(IPAddress.Any, 8987);
                     TcpListener server = new TcpListener(IPAddress.Any, 8987);
                     server.Start();
 
@@ -153,10 +125,10 @@ namespace ScreenDrawDesktop
 
                         int marker = 478934687;
                         byte[] intBytes = BitConverter.GetBytes(marker);
-                        byte a = intBytes[3];
-                        byte b = intBytes[2];
-                        byte c = intBytes[1];
-                        byte d = intBytes[0];
+                        byte a = intBytes[0];
+                        byte b = intBytes[1];
+                        byte c = intBytes[2];
+                        byte d = intBytes[3];
 
                         List<float> points = new();
 
@@ -181,14 +153,42 @@ namespace ScreenDrawDesktop
                                             throw new System.Exception("Too many!");
                                     }
 
-                                    int type = reader.ReadInt32();
-                                    if (type < 0)
-                                    {
-                                        type = -type;
-                                    }
+                                    int inputType = reader.ReadInt32();
                                     float x = reader.ReadSingle();
                                     float y = reader.ReadSingle();
                                     float pressure = reader.ReadSingle();
+
+                                    const float THRESHOLD = 0.25f;
+
+                                    int type = 0;
+                                    if (inputType == 0)
+                                    {
+                                        if (down)
+                                        {
+                                            down = false;
+                                            type = 2;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (pressure > THRESHOLD)
+                                        {
+                                            if (!down)
+                                            {
+                                                down = true;
+                                                type = 1;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (down)
+                                            {
+                                                down = false;
+                                                type = 2;
+                                            }
+                                        }
+                                    }
+
                                     //Console.WriteLine("Received: " + type + " " + x + " " + y + " " + pressure);
                                     //writer.Flush();
 
@@ -205,30 +205,20 @@ namespace ScreenDrawDesktop
                                         points.Add(x * width);
                                         points.Add(y * height);
 
-                                        //x /= 2200;
-                                        //y /= 1650;
                                         x *= 65535;
                                         y *= 65535;
 
                                         int xx = (int)x;
                                         int yy = (int)y;
 
-                                        //System.Windows.Forms.Cursor.Position = new System.Drawing.Point(xx, yy);
-                                        //SetCursorPos(xx, yy);
-
-                                        //if (type == 1)
-                                        //    mouse_event(MouseEventFlags.LeftDown, 0, 0, 0, 0);
-                                        //else if (type == 2)
-                                        //    mouse_event(MouseEventFlags.LeftUp, 0, 0, 0, 0);
-
                                         uint flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
-                                        if (type == 1)
-                                            flags |= DOWN;
-                                        else if (type == 2)
-                                            flags |= UP;
+                                        //if (type == 1)
+                                        //    flags |= DOWN;
+                                        //else if (type == 2)
+                                        //    flags |= UP;
                                         mouse_event(flags, xx, yy, 0, 0);
 
-                                        Thread.Sleep(TimeSpan.FromTicks(1000));
+                                        Thread.Sleep(TimeSpan.FromTicks(100));
                                     }
                                 }
                                 if (points.Count > MIN_POINTS * 2 || (points.Count > 0 && !stream.DataAvailable))
@@ -239,7 +229,7 @@ namespace ScreenDrawDesktop
                                     {
                                         using (DrawingContext drawingContext = drawingVisual.RenderOpen())
                                         {
-                                            SolidColorBrush brush = Brushes.Red; // Choose your desired color
+                                            SolidColorBrush brush = Brushes.Red;
                                             for (int i = 0; i < points2.Count; i += 2)
                                             {
                                                 //Console.WriteLine("Drawing: " + points2[i + 0] + ", " + points2[i + 1]);

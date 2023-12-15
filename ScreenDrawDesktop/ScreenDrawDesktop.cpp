@@ -390,6 +390,8 @@ void Receive()
 		}
 		else if (recvResult == 0)
 		{
+			//closesocket(clientSocket);
+			clientSocket = NULL;
 			std::cout << "Connection closed by peer." << std::endl;
 			continue;
 		}

@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\ScreenDrawDesktop\\ScreenDrawDesktop.csproj",
+      "projectUniqueName": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\GarbageScreenDrawDesktop\\ScreenDrawDesktop.csproj",
       "projectName": "ScreenDrawDesktop",
-      "projectPath": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\ScreenDrawDesktop\\ScreenDrawDesktop.csproj",
+      "projectPath": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\GarbageScreenDrawDesktop\\ScreenDrawDesktop.csproj",
       "packagesPath": "C:\\Users\\Precision Cats\\.nuget\\packages\\",
-      "outputPath": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\ScreenDrawDesktop\\obj\\",
+      "outputPath": "D:\\Precision Cats\\Sync\\#Assets or Github#\\ScreenDraw\\GarbageScreenDrawDesktop\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\Precision Cats\\AppData\\Roaming\\NuGet\\NuGet.Config",
