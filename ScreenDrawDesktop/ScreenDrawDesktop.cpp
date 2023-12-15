@@ -488,6 +488,10 @@ void UpdateThread()
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
+			float ClearColor2[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor2);
+			pSwapChain->Present(0, 0);
+
 			PostQuitMessage(0);
 		}
 
@@ -528,15 +532,13 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 	if (nCode == HC_ACTION)
 	{
 		KBDLLHOOKSTRUCT* pKeyInfo = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
-
-		if (pKeyInfo->vkCode == VK_CONTROL)
+		if (pKeyInfo->vkCode == VK_CONTROL || pKeyInfo->vkCode == VK_LCONTROL || pKeyInfo->vkCode == VK_RCONTROL)
 		{
 			if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
 				ctrling = true;
 			else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
 				ctrling = false;
 		}
-
 		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYDOWN)
 		{
 			qPressed = true;
@@ -722,7 +724,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, nullptr, 0);
 
 	// Main message loop:
-	while (GetMessage(&msg, nullptr, 0, 0))
+	while (GetMessage(&msg, nullptr, 0, 0) && running)
 	{
 		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 		{
@@ -744,7 +746,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	closesocket(listenSocket);
 	WSACleanup();
 
-	return (int)msg.wParam;
+	return !running ? 1 : (int)msg.wParam;
 }
 
 
