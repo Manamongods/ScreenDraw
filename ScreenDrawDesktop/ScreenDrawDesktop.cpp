@@ -44,6 +44,9 @@ int drawColorID = 0;
 int WIDTH = 420; // 3440;
 int HEIGHT = 69; // 1440;
 
+// Simply makes it so the window doesn't take up the whole screen, so it doesn't hide the taskbar if there's another fullscreen application in the background or something
+#define TASKBAR_HACK 1
+
 struct Vertex
 {
 	DirectX::XMFLOAT4 position;
@@ -474,12 +477,19 @@ void UpdateThread()
 			if (previousFocusedWindow)
 				SetForegroundWindow(previousFocusedWindow);
 		}
-		else
+		else if (fw != NULL)
 			previousFocusedWindow = fw;
 
 		if (!paused && qPressed && wPressed && ePressed)
 		{
-			running = false;
+			qPressed = wPressed = ePressed = false;
+			paused = true;
+			UpdateIcon();
+			clear = true;
+			keyErase = false;
+			drawColorID = 0;
+
+			/*running = false;
 			clear = false;
 
 			float ClearColor[4] = { 0.0f, 0.1f, 0.1f, 1.0f };
@@ -492,7 +502,7 @@ void UpdateThread()
 			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor2);
 			pSwapChain->Present(0, 0);
 
-			PostQuitMessage(0);
+			PostQuitMessage(0);*/
 		}
 
 		if (clear)
@@ -726,6 +736,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// Main message loop:
 	while (GetMessage(&msg, nullptr, 0, 0) && running)
 	{
+		if (msg.message == WM_QUIT)
+			break;
+
 		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 		{
 			TranslateMessage(&msg);
@@ -795,7 +808,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	HEIGHT = GetSystemMetrics(SM_CYSCREEN);
 
 	hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
-		0, 0, WIDTH, HEIGHT, nullptr, nullptr, hInstance, nullptr); //CW_USEDEFAULT
+		0, 0, WIDTH - TASKBAR_HACK, HEIGHT, nullptr, nullptr, hInstance, nullptr); //CW_USEDEFAULT
 
 	if (!hWnd)
 	{
