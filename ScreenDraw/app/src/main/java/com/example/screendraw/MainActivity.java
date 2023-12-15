@@ -133,14 +133,12 @@ public class MainActivity extends AppCompatActivity {
 
                     Log.d(TAG, "C");
 
-                    //DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream());
                     while (socket.isConnected()) {
                         if (!toSend.isEmpty()) {
                             while(true) {
                                 Data ts = toSend.poll();
                                 if (ts == null)
                                     break;
-                                //Log.d(TAG, "D");
                                 dataOutputStream.writeInt(Integer.reverseBytes(478934687));
                                 dataOutputStream.writeInt(Integer.reverseBytes(ts.type));
                                 dataOutputStream.writeInt(Integer.reverseBytes(Float.floatToIntBits(ts.x)));
@@ -154,15 +152,18 @@ public class MainActivity extends AppCompatActivity {
                                 float move = (float)Math.sqrt(dx*dx+dy*dy);
                                 float lerp = 0.025f;
                                 average = (1.0f - lerp) * average + lerp * move;
-                                if (counter++ >= 100)
-                                {
+                                if (counter++ >= 100) {
                                     counter = 0;
                                     Log.d(TAG, "Smoothness is: " + (1.0f / average));
                                 }
                             }
                             dataOutputStream.flush();
                         }
-                        //sleep
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
 
                     Log.d(TAG, "E");
@@ -170,6 +171,12 @@ public class MainActivity extends AppCompatActivity {
                     outputStream.close();
                     socket.close();
                 } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                try {
+                    Thread.sleep(100); // idk
+                } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }

@@ -16,14 +16,19 @@
 #include <thread>
 #include <mutex>
 
-int WIDTH = 3440;
-int HEIGHT = 1440;
+int WIDTH = 420; // 3440;
+int HEIGHT = 69; // 1440;
+int HZ = 144;
 const float drawSize0 = 4.0f;
 const float drawSize1 = 4.0f;
 const float eraseSize = 200.0f;
+const float keyEraseSize = 100.0f;
 //#define CLICK_MOUSE
-float downThreshold = 0.45f;
-float upThreshold = 0.25f;
+//float downThreshold = 0.45f;
+//float upThreshold = 0.25f;
+float downThreshold = -1.0f;
+float upThreshold = -1.0f;
+#define MOUSE_MIN_DIST 3.0f
 
 int drawColorID = 0;
 #define DRAW_COLOR_COUNT 3
@@ -59,7 +64,7 @@ void InitDirectX(HWND hWnd)
 	swapChainDesc.BufferDesc.Width = WIDTH;
 	swapChainDesc.BufferDesc.Height = HEIGHT;
 	swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+	swapChainDesc.BufferDesc.RefreshRate.Numerator = HZ;
 	swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
 	swapChainDesc.SampleDesc.Count = 1;
 	swapChainDesc.SampleDesc.Quality = 0;
@@ -68,19 +73,17 @@ void InitDirectX(HWND hWnd)
 	swapChainDesc.OutputWindow = hWnd;
 	swapChainDesc.Windowed = TRUE;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
+	//swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0,
 		D3D11_SDK_VERSION, &swapChainDesc, &g_pSwapChain, &g_pd3dDevice, nullptr, &g_pd3dDeviceContext);
 
-	// Get the back buffer
 	ID3D11Texture2D* pBackBuffer;
 	g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
 	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
 	pBackBuffer->Release();
 
-	// Set render target
 	g_pd3dDeviceContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
 
-	// Setup viewport
 	D3D11_VIEWPORT vp;
 	vp.Width = WIDTH;
 	vp.Height = HEIGHT;
@@ -94,7 +97,6 @@ void InitDirectX(HWND hWnd)
 	g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
 }
 
-// Shader code for the vertex and pixel shaders
 const char* vertexShaderCode =
 "struct VertexInput {"
 "   float4 position : POSITION;"
@@ -133,12 +135,13 @@ ID3D11DepthStencilState* pDepthStencilState = NULL;
 
 float prevx, prevy;
 bool erasing;
+bool keyErase = false;
+ID3D11Buffer* pVertexBuffer = nullptr;
+int pVertexBufferSize = -1;
 void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 {
 	if (positions.size() == 0)
 		return;
-	ID3D11DeviceContext* pContext = g_pd3dDeviceContext;
-	ID3D11Device* pDevice = g_pd3dDevice;
 
 	float IW = 1.0f / WIDTH;
 	float IH = 1.0f / HEIGHT;
@@ -153,9 +156,9 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 		{
 			float s;
 			DirectX::XMFLOAT4 color{ 0.0f, 0.0f, 0.0f, 0.0f };
-			if (erasing)
+			if (erasing || keyErase)
 			{
-				s = eraseSize;
+				s = keyErase ? keyEraseSize : eraseSize;
 			}
 			else
 			{
@@ -201,54 +204,63 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 		prevy = y;
 	}
 
-	D3D11_BUFFER_DESC bufferDesc = {};
-	bufferDesc.Usage = D3D11_USAGE_DEFAULT;
-	bufferDesc.ByteWidth = sizeof(Vertex) * static_cast<UINT>(vertices.size());
-	bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
-	D3D11_SUBRESOURCE_DATA initData = {};
-	initData.pSysMem = vertices.data();
-
-	ID3D11Buffer* pVertexBuffer = nullptr;
-	HRESULT hr = pDevice->CreateBuffer(&bufferDesc, &initData, &pVertexBuffer);
-	if (FAILED(hr))
+	int s = sizeof(Vertex) * static_cast<UINT>(vertices.size());
+	if (pVertexBuffer == NULL || pVertexBufferSize < s)
 	{
-		std::cerr << hr << std::endl;
+		if (pVertexBuffer)
+			pVertexBuffer->Release();
+		pVertexBuffer = NULL;
+
+		pVertexBufferSize = max(2048, s * 2);
+
+		D3D11_BUFFER_DESC bufferDesc = {};
+		bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+		bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		bufferDesc.ByteWidth = pVertexBufferSize;
+		bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+		HRESULT hr = g_pd3dDevice->CreateBuffer(&bufferDesc, NULL, &pVertexBuffer);
+		if (FAILED(hr) || !pVertexBuffer)
+		{
+			pVertexBuffer = NULL;
+			std::cerr << "!pVertexBuffer. HR: " << hr << std::endl;
+			return;
+		}
 	}
-	if (!pVertexBuffer)
+
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	HRESULT hr = g_pd3dDeviceContext->Map(pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	if (SUCCEEDED(hr))
 	{
-		std::cerr << "!pVertexBuffer" << std::endl;
+		memcpy(mappedResource.pData, vertices.data(), s);
+		g_pd3dDeviceContext->Unmap(pVertexBuffer, 0);
+	}
+	else
+	{
+		std::cerr << "Couldn't map. HR: " << hr << std::endl;
 		return;
 	}
-	//std::cout << "Yes" << std::endl;
 
-	g_pd3dDeviceContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr); //?
-
-	g_pd3dDeviceContext->RSSetState(pRasterizerState);
-	g_pd3dDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
-
-	pContext->IASetInputLayout(pInputLayout);
+	//g_pd3dDeviceContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr); //?
+	//g_pd3dDeviceContext->RSSetState(pRasterizerState);
+	//g_pd3dDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
+	//g_pd3dDeviceContext->IASetInputLayout(pInputLayout);
 
 	UINT stride = sizeof(Vertex);
 	UINT offset = 0;
-	pContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &stride, &offset);
+	g_pd3dDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &stride, &offset);
 
-	pContext->VSSetShader(pVertexShader, nullptr, 0);
-	pContext->PSSetShader(pPixelShader, nullptr, 0);
-
-	pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST); //D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
-	pContext->Draw(static_cast<UINT>(vertices.size()), 0);
-
-	pVertexBuffer->Release();
+	g_pd3dDeviceContext->Draw(static_cast<UINT>(vertices.size()), 0);
 }
 
 std::mutex mutex;
 std::vector<char> data;
 
+bool running = true;
 bool clear = false;
 void Update()
 {
-	if (clear)
+	if (clear && running)
 	{
 		clear = false;
 		float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -322,8 +334,7 @@ void Update()
 
 			loc += 5 * 4;
 
-			const float minDist = 3.0f;
-			if (dist > minDist || loc >= data.size() || type != 0) // 
+			if (dist > MOUSE_MIN_DIST || loc >= data.size() || type != 0)
 			{
 				prevx = x;
 				prevy = y;
@@ -340,9 +351,7 @@ void Update()
 				else if (type == 2)
 					flags |= MOUSEEVENTF_LEFTUP;
 #endif
-				mouse_event(flags, xx, yy, 0, 0);
-
-				//System.Threading.Thread.Sleep(TimeSpan.FromTicks(1000));
+				mouse_event(flags, xx, yy, 0, 0); // TODO: Should this be called so often?
 			}
 		}
 		data.clear();
@@ -354,10 +363,9 @@ void Update()
 		}
 
 		g_pSwapChain->Present(1, 0);
-	}
-}
+			}
+		}
 
-bool running = true;
 void Receive()
 {
 	while (running)
@@ -377,9 +385,10 @@ void Receive()
 			std::cout << "Client connected!" << std::endl;
 		}
 
-		char recvBuffer[5 * 4 * 16];
+		constexpr int S = (5 * 4) * 8; //16
+		char recvBuffer[S];
 		int recvResult;
-		recvResult = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+		recvResult = recv(clientSocket, recvBuffer, S, 0);
 		if (recvResult > 0)
 		{
 			mutex.lock();
@@ -417,22 +426,49 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 HHOOK keyboardHook;
+static bool qPressed = false;
+static bool wPressed = false;
+static bool ePressed = false;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (nCode < 0)
 		return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
 	if (nCode == HC_ACTION)
 	{
-		// Check for key events here
 		KBDLLHOOKSTRUCT* pKeyInfo = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+
 		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYDOWN)
 		{
+			qPressed = true;
 			clear = true;
+			return 1;
+		}
+		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYUP)
+		{
+			qPressed = false;
+			return 1;
+		}
+		if (pKeyInfo->vkCode == 'W' && wParam == WM_KEYDOWN)
+		{
+			wPressed = keyErase = true;
+			return 1;
+		}
+		if (pKeyInfo->vkCode == 'W' && wParam == WM_KEYUP)
+		{
+			wPressed = keyErase = false;
+			return 1;
 		}
 		if (pKeyInfo->vkCode == 'E' && wParam == WM_KEYDOWN)
 		{
+			ePressed = true;
 			drawColorID++;
 			drawColorID = drawColorID % DRAW_COLOR_COUNT;
+			return 1;
+		}
+		if (pKeyInfo->vkCode == 'E' && wParam == WM_KEYUP)
+		{
+			ePressed = false;
+			return 1;
 		}
 	}
 	return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
@@ -446,7 +482,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 
-	// TODO: Place code here.
+	SetProcessDPIAware(); //SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
 	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -472,7 +508,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	if (result != 0) {
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return 1;
-}
+	}
 
 	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (listenSocket == INVALID_SOCKET) {
@@ -486,14 +522,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	serverAddr.sin_port = htons(8987);
 
-	if (bind(listenSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+	if (bind(listenSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+	{
 		std::cerr << "Bind failed with error: " << WSAGetLastError() << std::endl;
 		closesocket(listenSocket);
 		WSACleanup();
 		return 1;
 	}
 
-	if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
+	if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
+	{
 		std::cerr << "Listen failed with error: " << WSAGetLastError() << std::endl;
 		closesocket(listenSocket);
 		WSACleanup();
@@ -510,6 +548,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 
 	std::thread receiveThread(Receive);
+	if (!SetThreadPriority(receiveThread.native_handle(), THREAD_PRIORITY_HIGHEST))
+		std::cerr << "Failed to change thread priority.\n";
 
 
 	ID3DBlob* pErrorBlob = nullptr;
@@ -569,13 +609,34 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	depthStencilDesc.DepthFunc = D3D11_COMPARISON_ALWAYS; // Set depth comparison function
 	g_pd3dDevice->CreateDepthStencilState(&depthStencilDesc, &pDepthStencilState);
 
+	// Set one time here
+	g_pd3dDeviceContext->RSSetState(pRasterizerState);
+	g_pd3dDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
+	g_pd3dDeviceContext->IASetInputLayout(pInputLayout);
+	g_pd3dDeviceContext->VSSetShader(pVertexShader, nullptr, 0);
+	g_pd3dDeviceContext->PSSetShader(pPixelShader, nullptr, 0);
+	g_pd3dDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	// Main message loop:
 	while (GetMessage(&msg, nullptr, 0, 0))
 	{
+		if (qPressed && wPressed && ePressed)
+		{
+			running = false;
+
+			float ClearColor[4] = { 0.0f, 0.1f, 0.1f, 1.0f };
+			g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
+			g_pSwapChain->Present(1, 0);
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+			PostQuitMessage(0);
+		}
+
 		try
 		{
-			Update();
+			if (running)
+				Update();
 		}
 		catch (...)
 		{
@@ -592,6 +653,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	running = false;
 
 	std::cerr << "Ending?" << std::endl;
+
+	if (pVertexBuffer)
+		pVertexBuffer->Release();
+	pVertexBuffer = NULL;
 
 	if (clientSocket != NULL)
 		closesocket(clientSocket);
@@ -643,10 +708,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
 
-	int WIDTH = GetSystemMetrics(SM_CXSCREEN);
-	int HEIGHT = GetSystemMetrics(SM_CYSCREEN);
+	WIDTH = GetSystemMetrics(SM_CXSCREEN);
+	HEIGHT = GetSystemMetrics(SM_CYSCREEN);
 
-	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP | WS_VISIBLE,
+	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
 		0, 0, WIDTH, HEIGHT, nullptr, nullptr, hInstance, nullptr); //CW_USEDEFAULT
 
 	if (!hWnd)
@@ -654,18 +719,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
-	InitDirectX(hWnd);
+	SetMenu(hWnd, NULL);
 
-	//SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_TRANSPARENT);
+	InitDirectX(hWnd);
 
 	ShowWindow(hWnd, nCmdShow);
 	//UpdateWindow(hWnd);
 
-	//SetWindowLongPtr(hWnd, GWL_EXSTYLE, (GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TRANSPARENT) & ~WS_CAPTION & ~WS_THICKFRAME & ~WS_BORDER & ~WS_SYSMENU);
 	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TRANSPARENT);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-
-	//SetWindowPos(hWnd, HWND_TOP, 0, 0, screenWidth, screenHeight, SWP_SHOWWINDOW);
 
 	SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
 
@@ -686,10 +748,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
-		//case WM_NCHITTEST:
-		//    // Return HTTRANSPARENT for the regions you want to be click-through
-		//    return HTTRANSPARENT;
-
 		//case WM_KEYDOWN:
 		//	if (wParam == VK_LEFT)
 		//	{
