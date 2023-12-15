@@ -16,21 +16,25 @@
 #include <thread>
 #include <mutex>
 
-int WIDTH = 420; // 3440;
-int HEIGHT = 69; // 1440;
 int HZ = 144;
 const float drawSize0 = 4.0f;
 const float drawSize1 = 4.0f;
 const float eraseSize = 200.0f;
-const float keyEraseSize = 100.0f;
-//#define CLICK_MOUSE
-//float downThreshold = 0.45f;
-//float upThreshold = 0.25f;
+const float keyEraseSize = 100.0f; // For when holding W
+
+#if 1
+float downThreshold = 0.45f;
+float upThreshold = 0.25f;
+#else
 float downThreshold = -1.0f;
 float upThreshold = -1.0f;
-#define MOUSE_MIN_DIST 3.0f
+#endif
 
-int drawColorID = 0;
+//#define CLICK_MOUSE
+
+#define MOUSE_MIN_DIST 5.0f
+#define BATCH 8
+
 #define DRAW_COLOR_COUNT 3
 DirectX::XMFLOAT4 drawColors[DRAW_COLOR_COUNT]
 {
@@ -38,6 +42,10 @@ DirectX::XMFLOAT4 drawColors[DRAW_COLOR_COUNT]
 	{0.0f,1.0f,0.0f,1.0f},
 	{0.0f,0.0f,1.0f,1.0f},
 };
+int drawColorID = 0;
+
+int WIDTH = 420; // 3440;
+int HEIGHT = 69; // 1440;
 
 struct Vertex
 {
@@ -253,8 +261,9 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 	g_pd3dDeviceContext->Draw(static_cast<UINT>(vertices.size()), 0);
 }
 
-std::mutex mutex;
-std::vector<char> data;
+std::mutex mutex; // Lock for data0
+std::vector<char> data0;
+std::vector<char> data1;
 
 bool running = true;
 bool clear = false;
@@ -265,23 +274,28 @@ void Update()
 		clear = false;
 		float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
-		g_pSwapChain->Present(1, 0);
+		g_pSwapChain->Present(0, 0);
 	}
 	//std::cerr << "Update" << std::endl;
 
-	if (data.size() > 0)
+	mutex.lock();
+	data1.resize(data0.size());
+	memcpy(data1.data(), data0.data(), data0.size());
+	data0.clear();
+	mutex.unlock();
+
+	if (data1.size() > 0)
 	{
 		//std::cout << "Received: " << std::string(recvBuffer, recvResult) << std::endl;
 
 		std::vector<DirectX::XMFLOAT4> points;
 
-		mutex.lock();
 		int loc = 0;
-		while (loc < ((int)data.size() - 3) && (*((int*)(data.data() + loc)) != 478934687))
+		while (loc < ((int)data1.size() - 3) && (*((int*)(data1.data() + loc)) != 478934687))
 			loc++;
-		while (loc < (int)data.size() - 5 * 4 + 1)
+		while (loc < (int)data1.size() - 5 * 4 + 1)
 		{
-			char* b = data.data() + loc;
+			char* b = data1.data() + loc;
 			int inputType = *((int*)b + 1);
 			float x = *((float*)b + 2);
 			float y = *((float*)b + 3);
@@ -334,7 +348,7 @@ void Update()
 
 			loc += 5 * 4;
 
-			if (dist > MOUSE_MIN_DIST || loc >= data.size() || type != 0)
+			if (dist > MOUSE_MIN_DIST || loc >= data1.size() || type != 0)
 			{
 				prevx = x;
 				prevy = y;
@@ -345,6 +359,9 @@ void Update()
 				int yy = (int)y;
 
 				UINT flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
+#if 0
+				SetCursorPos(prevx * WIDTH, prevy * HEIGHT);
+#else
 #ifdef CLICK_MOUSE
 				if (type == 1)
 					flags |= MOUSEEVENTF_LEFTDOWN;
@@ -352,19 +369,18 @@ void Update()
 					flags |= MOUSEEVENTF_LEFTUP;
 #endif
 				mouse_event(flags, xx, yy, 0, 0); // TODO: Should this be called so often?
+#endif
 			}
 		}
-		data.clear();
-		mutex.unlock();
 
 		if (points.size() > 0)
 		{
 			RenderLines(points);
+		
+			g_pSwapChain->Present(0, 0);
 		}
-
-		g_pSwapChain->Present(1, 0);
-			}
-		}
+	}
+}
 
 void Receive()
 {
@@ -385,16 +401,16 @@ void Receive()
 			std::cout << "Client connected!" << std::endl;
 		}
 
-		constexpr int S = (5 * 4) * 8; //16
+		constexpr int S = (5 * 4) * BATCH; //16
 		char recvBuffer[S];
 		int recvResult;
 		recvResult = recv(clientSocket, recvBuffer, S, 0);
 		if (recvResult > 0)
 		{
 			mutex.lock();
-			int c = data.size();
-			data.resize(c + recvResult);
-			memcpy(data.data() + c, recvBuffer, recvResult);
+			int c = data0.size();
+			data0.resize(c + recvResult);
+			memcpy(data0.data() + c, recvBuffer, recvResult);
 			mutex.unlock();
 		}
 		else if (recvResult == 0)
@@ -544,7 +560,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	MSG msg;
 
-	g_pSwapChain->Present(1, 0);
+	g_pSwapChain->Present(0, 0);
 
 
 	std::thread receiveThread(Receive);
@@ -626,7 +642,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 			float ClearColor[4] = { 0.0f, 0.1f, 0.1f, 1.0f };
 			g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
-			g_pSwapChain->Present(1, 0);
+			g_pSwapChain->Present(0, 0);
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 

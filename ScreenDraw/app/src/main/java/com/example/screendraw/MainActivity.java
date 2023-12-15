@@ -1,27 +1,35 @@
 package com.example.screendraw;
 
 import androidx.appcompat.app.AppCompatActivity;
-
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-
 import java.io.OutputStream;
 import java.io.DataOutputStream;
 import android.content.Context;
 import android.view.MotionEvent;
 import android.view.View;
 import android.util.Log;
-
 import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Handler;
 import android.os.Looper;
 import java.net.Socket;
-import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.widget.Button;
+import android.widget.EditText;
 
 public class MainActivity extends AppCompatActivity {
+    int BATCH = 8;
 
-    private static final String TAG = "Wi-Fi Direct Example";
+    private EditText ipAddressET, portET;
+    private SharedPreferences sharedPreferences;
+    private static final String SHARED_PREFS = "screenDrawPrefs", IP_ADDRESS = "ip", PORT = "port";
+
+    String ip = "";
+    int port = 8987;
+
+    private static final String TAG = "ScreenDraw";
     private WifiP2pManager wifiP2pManager;
     private WifiP2pManager.Channel channel;
     private Handler handler = new Handler(Looper.getMainLooper());
@@ -97,45 +105,67 @@ public class MainActivity extends AppCompatActivity {
         t.start();
 
         HoverView surfaceView = findViewById(R.id.hoverView);
-        surfaceView.setOnTouchListener(onTouchListener);
+        surfaceView.setVisibility(View.GONE);
 
         View decorView = getWindow().getDecorView();
         int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 | View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
         decorView.setSystemUiVisibility(uiOptions);
+
+        ipAddressET = findViewById(R.id.ipAddress);
+        portET = findViewById(R.id.port);
+        Button button = findViewById(R.id.button);
+        sharedPreferences = getSharedPreferences(SHARED_PREFS, MODE_PRIVATE);
+        ipAddressET.setText(sharedPreferences.getString(IP_ADDRESS, "000.000.0.000"));
+        portET.setText(sharedPreferences.getString(PORT, "8987"));
+
+        button.setOnClickListener(v -> {
+            ip = ipAddressET.getText().toString();
+            port = Integer.parseInt(portET.getText().toString());
+
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString(IP_ADDRESS, ip);
+            editor.putString(PORT, Integer.toString(port));
+            editor.apply();
+
+            ipAddressET.clearFocus();
+            portET.clearFocus();
+
+            ipAddressET.setVisibility(View.GONE);
+            portET.setVisibility(View.GONE);
+            button.setVisibility(View.GONE);
+
+            surfaceView.setVisibility(View.VISIBLE);
+            surfaceView.setOnTouchListener(onTouchListener);
+        });
     }
 
     class Data
     {
         int type;
-        float x,y,pressure;
+        float x, y, pressure;
     }
     LinkedBlockingQueue<Data> toSend = new LinkedBlockingQueue<Data>();
 
     private class Do implements Runnable {
-        float prevx = 0, prevy = 0;
-        float average = 0;
-        int counter = 0;
+        private float prevx = 0, prevy = 0;
+        private float average = 0;
+        private int counter = 0;
 
         @Override
         public void run() {
             while(true) {
                 try {
                     Log.d(TAG, "A");
-
-                    Socket socket = new Socket("***REMOVED***", 8987);
+                    Socket socket = new Socket(ip, port);
                     Log.d(TAG, "B");
-
                     OutputStream outputStream = socket.getOutputStream();
-
                     DataOutputStream dataOutputStream = new DataOutputStream(outputStream);
-
                     Log.d(TAG, "C");
-
                     while (socket.isConnected()) {
                         if (!toSend.isEmpty()) {
-                            while(true) {
+                            for (int i = 0; i < BATCH; i++) {
                                 Data ts = toSend.poll();
                                 if (ts == null)
                                     break;
@@ -165,9 +195,7 @@ public class MainActivity extends AppCompatActivity {
                             e.printStackTrace();
                         }
                     }
-
                     Log.d(TAG, "E");
-
                     outputStream.close();
                     socket.close();
                 } catch (Exception e) {
@@ -175,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 try {
-                    Thread.sleep(100); // idk
+                    Thread.sleep(1000); // idk
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
