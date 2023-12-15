@@ -22,13 +22,10 @@ const float drawSize1 = 4.0f;
 const float eraseSize = 200.0f;
 const float keyEraseSize = 100.0f; // For when holding W
 
-#if 1
 float downThreshold = 0.45f;
 float upThreshold = 0.25f;
-#else
-float downThreshold = -1.0f;
-float upThreshold = -1.0f;
-#endif
+float ctrlDownThreshold = -1.0f;
+float ctrlUpThreshold = -1.0f;
 
 //#define CLICK_MOUSE
 
@@ -284,6 +281,7 @@ std::vector<char> data1;
 
 bool paused = true;
 
+bool ctrling = false;
 bool running = true;
 bool clear = false;
 void Update()
@@ -327,7 +325,7 @@ void Update()
 			{
 				if (down)
 				{
-					if (pressure < upThreshold)
+					if (pressure < (ctrling ? ctrlUpThreshold : upThreshold))
 					{
 						down = false;
 						type = UP;
@@ -335,7 +333,7 @@ void Update()
 				}
 				else
 				{
-					if (pressure > downThreshold)
+					if (pressure > (ctrling ? ctrlDownThreshold : downThreshold))
 					{
 						down = true;
 						type = DOWN;
@@ -530,6 +528,14 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 	if (nCode == HC_ACTION)
 	{
 		KBDLLHOOKSTRUCT* pKeyInfo = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+
+		if (pKeyInfo->vkCode == VK_CONTROL)
+		{
+			if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+				ctrling = true;
+			else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+				ctrling = false;
+		}
 
 		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYDOWN)
 		{
