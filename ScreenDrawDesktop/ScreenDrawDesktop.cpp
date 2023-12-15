@@ -61,10 +61,11 @@ struct Vertex
 SOCKET listenSocket = NULL;
 SOCKET clientSocket = NULL;
 
-ID3D11Device* g_pd3dDevice = nullptr;
-ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
-IDXGISwapChain* g_pSwapChain = nullptr;
-ID3D11RenderTargetView* g_pRenderTargetView = nullptr;
+ID3D11Device* pDevice = nullptr;
+ID3D11DeviceContext* pDeviceContext = nullptr;
+IDXGISwapChain* pSwapChain = nullptr;
+ID3D11RenderTargetView* pRenderTargetView = nullptr;
+//ID3D11RenderTargetView* pTempRenderTargetView = nullptr;
 
 void InitDirectX(HWND hWnd)
 {
@@ -83,14 +84,30 @@ void InitDirectX(HWND hWnd)
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL;
 	//swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 	D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0,
-		D3D11_SDK_VERSION, &swapChainDesc, &g_pSwapChain, &g_pd3dDevice, nullptr, &g_pd3dDeviceContext);
+		D3D11_SDK_VERSION, &swapChainDesc, &pSwapChain, &pDevice, nullptr, &pDeviceContext);
 
 	ID3D11Texture2D* pBackBuffer;
-	g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
-	g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
+	pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
+	pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &pRenderTargetView);
 	pBackBuffer->Release();
 
-	g_pd3dDeviceContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
+	//ID3D11Texture2D* pRenderTargetTexture;
+	//D3D11_TEXTURE2D_DESC textureDesc = {};
+	//textureDesc.Width = WIDTH;
+	//textureDesc.Height = HEIGHT;
+	//textureDesc.MipLevels = 1;
+	//textureDesc.ArraySize = 1;
+	//textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//textureDesc.SampleDesc.Count = 1;
+	//textureDesc.SampleDesc.Quality = 0;
+	//textureDesc.Usage = D3D11_USAGE_DEFAULT;
+	//textureDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	//textureDesc.CPUAccessFlags = 0;
+	//textureDesc.MiscFlags = 0;
+	//pDevice->CreateTexture2D(&textureDesc, nullptr, &pRenderTargetTexture);
+	//pDevice->CreateRenderTargetView(pRenderTargetTexture, nullptr, &pTempRenderTargetView);
+
+	pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
 
 	D3D11_VIEWPORT vp;
 	vp.Width = WIDTH;
@@ -99,10 +116,10 @@ void InitDirectX(HWND hWnd)
 	vp.MaxDepth = 1.0f;
 	vp.TopLeftX = 0;
 	vp.TopLeftY = 0;
-	g_pd3dDeviceContext->RSSetViewports(1, &vp);
+	pDeviceContext->RSSetViewports(1, &vp);
 
 	float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
+	pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
 }
 
 const char* vertexShaderCode =
@@ -227,7 +244,7 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 		bufferDesc.ByteWidth = pVertexBufferSize;
 		bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
-		HRESULT hr = g_pd3dDevice->CreateBuffer(&bufferDesc, NULL, &pVertexBuffer);
+		HRESULT hr = pDevice->CreateBuffer(&bufferDesc, NULL, &pVertexBuffer);
 		if (FAILED(hr) || !pVertexBuffer)
 		{
 			pVertexBuffer = NULL;
@@ -237,11 +254,11 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 	}
 
 	D3D11_MAPPED_SUBRESOURCE mappedResource;
-	HRESULT hr = g_pd3dDeviceContext->Map(pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	HRESULT hr = pDeviceContext->Map(pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	if (SUCCEEDED(hr))
 	{
 		memcpy(mappedResource.pData, vertices.data(), s);
-		g_pd3dDeviceContext->Unmap(pVertexBuffer, 0);
+		pDeviceContext->Unmap(pVertexBuffer, 0);
 	}
 	else
 	{
@@ -249,33 +266,28 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 		return;
 	}
 
-	//g_pd3dDeviceContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr); //?
-	//g_pd3dDeviceContext->RSSetState(pRasterizerState);
-	//g_pd3dDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
-	//g_pd3dDeviceContext->IASetInputLayout(pInputLayout);
+	//pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr); //?
+	//pDeviceContext->RSSetState(pRasterizerState);
+	//pDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
+	//pDeviceContext->IASetInputLayout(pInputLayout);
 
 	UINT stride = sizeof(Vertex);
 	UINT offset = 0;
-	g_pd3dDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &stride, &offset);
+	pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &stride, &offset);
 
-	g_pd3dDeviceContext->Draw(static_cast<UINT>(vertices.size()), 0);
+	pDeviceContext->Draw(static_cast<UINT>(vertices.size()), 0);
 }
 
 std::mutex mutex; // Lock for data0
 std::vector<char> data0;
 std::vector<char> data1;
 
+bool paused = true;
+
 bool running = true;
 bool clear = false;
 void Update()
 {
-	if (clear && running)
-	{
-		clear = false;
-		float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
-		g_pSwapChain->Present(0, 0);
-	}
 	//std::cerr << "Update" << std::endl;
 
 	mutex.lock();
@@ -376,16 +388,22 @@ void Update()
 		if (points.size() > 0)
 		{
 			RenderLines(points);
-		
-			g_pSwapChain->Present(0, 0);
+
+			pSwapChain->Present(0, 0);
 		}
 	}
 }
 
-void Receive()
+void ReceiveThread()
 {
 	while (running)
 	{
+		if (paused)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+			continue;
+		}
+
 		if (clientSocket == NULL)
 		{
 			std::cout << "Waiting for incoming connections..." << std::endl;
@@ -428,12 +446,75 @@ void Receive()
 	}
 }
 
+HWND hWnd = NULL;
+HWND previousFocusedWindow = NULL;
+
+static bool qPressed = false;
+static bool wPressed = false;
+static bool ePressed = false;
+
 #define MAX_LOADSTRING 100
 
-// Global Variables:
 HINSTANCE hInst;                                // current instance
 WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
+
+void UpdateIcon()
+{
+	HICON hNewIcon = LoadIcon(hInst, MAKEINTRESOURCE(paused ? IDI_SCREENDRAWINACTIVE : IDI_SCREENDRAWACTIVE));
+	SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hNewIcon);
+	SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hNewIcon);
+}
+
+void UpdateThread()
+{
+	while (running)
+	{
+		HWND fw = GetForegroundWindow();
+		if (fw == hWnd)
+		{
+			if (previousFocusedWindow)
+				SetForegroundWindow(previousFocusedWindow);
+		}
+		else
+			previousFocusedWindow = fw;
+
+		if (!paused && qPressed && wPressed && ePressed)
+		{
+			running = false;
+			clear = false;
+
+			float ClearColor[4] = { 0.0f, 0.1f, 0.1f, 1.0f };
+			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
+			pSwapChain->Present(0, 0);
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+			PostQuitMessage(0);
+		}
+
+		if (clear)
+		{
+			clear = false;
+			float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
+			pSwapChain->Present(0, 0);
+		}
+
+		try
+		{
+			if (running && !paused)
+				Update();
+		}
+		catch (...)
+		{
+			std::cerr << "Caught an exception!" << std::endl;
+		}
+
+		if (paused)
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
+}
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -442,12 +523,9 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 
 HHOOK keyboardHook;
-static bool qPressed = false;
-static bool wPressed = false;
-static bool ePressed = false;
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (nCode < 0)
+	if (paused || nCode < 0)
 		return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
 	if (nCode == HC_ACTION)
 	{
@@ -554,16 +632,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		return 1;
 	}
 
-	keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, nullptr, 0);
-
 	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_SCREENDRAWDESKTOP));
 
 	MSG msg;
 
-	g_pSwapChain->Present(0, 0);
+	pSwapChain->Present(0, 0);
 
 
-	std::thread receiveThread(Receive);
+	std::thread receiveThread(ReceiveThread);
 	if (!SetThreadPriority(receiveThread.native_handle(), THREAD_PRIORITY_HIGHEST))
 		std::cerr << "Failed to change thread priority.\n";
 
@@ -581,7 +657,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		}
 		return 1;
 	}
-	hr = g_pd3dDevice->CreateVertexShader(pVertexShaderBlob->GetBufferPointer(), pVertexShaderBlob->GetBufferSize(), nullptr, &pVertexShader);
+	hr = pDevice->CreateVertexShader(pVertexShaderBlob->GetBufferPointer(), pVertexShaderBlob->GetBufferSize(), nullptr, &pVertexShader);
 	if (FAILED(hr))
 	{
 		std::cerr << "No VS: " << hr << std::endl;
@@ -599,7 +675,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		}
 		return 1;
 	}
-	hr = g_pd3dDevice->CreatePixelShader(pPixelShaderBlob->GetBufferPointer(), pPixelShaderBlob->GetBufferSize(), nullptr, &pPixelShader);
+	hr = pDevice->CreatePixelShader(pPixelShaderBlob->GetBufferPointer(), pPixelShaderBlob->GetBufferSize(), nullptr, &pPixelShader);
 	if (FAILED(hr))
 	{
 		std::cerr << "No PS: " << hr << std::endl;
@@ -611,59 +687,42 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, sizeof(float) * 4, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
-	g_pd3dDevice->CreateInputLayout(layout, 2, pVertexShaderBlob->GetBufferPointer(), pVertexShaderBlob->GetBufferSize(), &pInputLayout);
+	pDevice->CreateInputLayout(layout, 2, pVertexShaderBlob->GetBufferPointer(), pVertexShaderBlob->GetBufferSize(), &pInputLayout);
 
 	D3D11_RASTERIZER_DESC rasterizerDesc = {};
 	rasterizerDesc.CullMode = D3D11_CULL_NONE;
 	rasterizerDesc.FillMode = D3D11_FILL_SOLID;
 	rasterizerDesc.ScissorEnable = false;
-	g_pd3dDevice->CreateRasterizerState(&rasterizerDesc, &pRasterizerState);
+	pDevice->CreateRasterizerState(&rasterizerDesc, &pRasterizerState);
 
 	D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
 	depthStencilDesc.DepthEnable = FALSE; // Enable depth testing
 	depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; // Enable writing to depth buffer
 	depthStencilDesc.DepthFunc = D3D11_COMPARISON_ALWAYS; // Set depth comparison function
-	g_pd3dDevice->CreateDepthStencilState(&depthStencilDesc, &pDepthStencilState);
+	pDevice->CreateDepthStencilState(&depthStencilDesc, &pDepthStencilState);
 
 	// Set one time here
-	g_pd3dDeviceContext->RSSetState(pRasterizerState);
-	g_pd3dDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
-	g_pd3dDeviceContext->IASetInputLayout(pInputLayout);
-	g_pd3dDeviceContext->VSSetShader(pVertexShader, nullptr, 0);
-	g_pd3dDeviceContext->PSSetShader(pPixelShader, nullptr, 0);
-	g_pd3dDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pDeviceContext->RSSetState(pRasterizerState);
+	pDeviceContext->OMSetDepthStencilState(pDepthStencilState, 1); // 1 is the stencil reference value
+	pDeviceContext->IASetInputLayout(pInputLayout);
+	pDeviceContext->VSSetShader(pVertexShader, nullptr, 0);
+	pDeviceContext->PSSetShader(pPixelShader, nullptr, 0);
+	pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	std::thread updateThread(UpdateThread);
+	if (!SetThreadPriority(updateThread.native_handle(), THREAD_PRIORITY_HIGHEST))
+		std::cerr << "Failed to change update thread priority.\n";
+
+	keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardProc, nullptr, 0);
 
 	// Main message loop:
 	while (GetMessage(&msg, nullptr, 0, 0))
 	{
-		if (qPressed && wPressed && ePressed)
+		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 		{
-			running = false;
-
-			float ClearColor[4] = { 0.0f, 0.1f, 0.1f, 1.0f };
-			g_pd3dDeviceContext->ClearRenderTargetView(g_pRenderTargetView, ClearColor);
-			g_pSwapChain->Present(0, 0);
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-			PostQuitMessage(0);
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
 		}
-
-		try
-		{
-			if (running)
-				Update();
-		}
-		catch (...)
-		{
-			std::cerr << "Caught an exception!" << std::endl;
-		}
-
-		//if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-		//{
-			//TranslateMessage(&msg);
-			//DispatchMessage(&msg);
-		//}
 	}
 
 	running = false;
@@ -700,12 +759,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.cbClsExtra = 0;
 	wcex.cbWndExtra = 0;
 	wcex.hInstance = hInstance;
-	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SCREENDRAWDESKTOP));
+	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SCREENDRAWACTIVE));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszMenuName = MAKEINTRESOURCEW(IDC_SCREENDRAWDESKTOP);
 	wcex.lpszClassName = szWindowClass;
-	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SCREENDRAWACTIVE));
 
 	return RegisterClassExW(&wcex);
 }
@@ -727,7 +786,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	WIDTH = GetSystemMetrics(SM_CXSCREEN);
 	HEIGHT = GetSystemMetrics(SM_CYSCREEN);
 
-	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
+	hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
 		0, 0, WIDTH, HEIGHT, nullptr, nullptr, hInstance, nullptr); //CW_USEDEFAULT
 
 	if (!hWnd)
@@ -739,10 +798,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	InitDirectX(hWnd);
 
+	previousFocusedWindow = GetForegroundWindow();
+
 	ShowWindow(hWnd, nCmdShow);
 	//UpdateWindow(hWnd);
 
-	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+	SetWindowLongPtr(hWnd, GWL_EXSTYLE, GetWindowLongPtr(hWnd, GWL_EXSTYLE) | WS_EX_LAYERED | WS_EX_TRANSPARENT); // | WS_EX_NOACTIVATE
+
+	//ShowWindow(hWnd, SW_SHOWNA);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
@@ -764,39 +827,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
-		//case WM_KEYDOWN:
-		//	if (wParam == VK_LEFT)
-		//	{
-		//	}
-		//	break;
-
-		//case WM_COMMAND:
-		//{
-		//	int wmId = LOWORD(wParam);
-		//	// Parse the menu selections:
-		//	switch (wmId)
-		//	{
-		//		case IDM_ABOUT:
-		//			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-		//			break;
-		//		case IDM_EXIT:
-		//			DestroyWindow(hWnd);
-		//			break;
-		//		default:
-		//			return DefWindowProc(hWnd, message, wParam, lParam);
-		//	}
-		//}
-		//break;
-		// 
-		//case WM_PAINT:
-		//{
-		//	PAINTSTRUCT ps;
-		//	HDC hdc = BeginPaint(hWnd, &ps);
-		//	// TODO: Add any drawing code that uses hdc here...
-		//	EndPaint(hWnd, &ps);
-		//}
-		//break;
-
+		case WM_ACTIVATE:
+			if (LOWORD(wParam) == WA_ACTIVE)
+			{
+				paused = !paused;
+				UpdateIcon();
+				if (paused)
+					clear = true;
+			}
+			break;
 		case WM_DESTROY:
 			PostQuitMessage(0);
 			break;
@@ -804,24 +843,4 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 	return 0;
-}
-
-// Message handler for about box.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_INITDIALOG:
-			return (INT_PTR)TRUE;
-
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-			{
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			break;
-	}
-	return (INT_PTR)FALSE;
 }

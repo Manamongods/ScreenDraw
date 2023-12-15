@@ -39,10 +39,10 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="small.ico">
+    <Image Include="Active.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="ScreenDrawDesktop.ico">
+    <Image Include="Inactive.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

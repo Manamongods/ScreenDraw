@@ -153,8 +153,8 @@
     <ResourceCompile Include="ScreenDrawDesktop.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="ScreenDrawDesktop.ico" />
-    <Image Include="small.ico" />
+    <Image Include="Active.ico" />
+    <Image Include="Inactive.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
