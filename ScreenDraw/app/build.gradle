@@ -26,6 +26,23 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+    
+    buildTypes {
+        applicationVariants.all { variant ->
+            if (variant.buildType.name == "release") {
+                variant.outputs.all {
+                    outputFileName = "ScreenDraw.apk"
+                }
+            }
+        }
+        applicationVariants.all { variant ->
+            if (variant.buildType.name == "debug") {
+                variant.outputs.all {
+                    outputFileName = "ScreenDrawDebug.apk"
+                }
+            }
+        }
+    }
 }
 
 dependencies {

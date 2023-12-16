@@ -8,16 +8,12 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
-/build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 */.vs/
 *.tlog
-*/x64
-ScreenDrawDesktop/ScreenDraw.log
-*/bin/
 .dll
 .cache
 .pdb
@@ -25,6 +21,15 @@ ScreenDrawDesktop/ScreenDraw.log
 
 drawable - Shortcut.lnk
 ScreenDraw.log
+ScreenDrawDesktop/ScreenDraw.log
 
 ScreenDrawDesktop/Debug
 GarbageScreenDrawDesktop/obj
+
+ScreenDrawDesktop/x64/Debug/*
+ScreenDrawDesktop/x64/Release/*
+!ScreenDrawDesktop/x64/Release/ScreenDrawDesktop.exe
+
+GarbageScreenDrawDesktop/bin/Debug/net5.0-windows/*
+!GarbageScreenDrawDesktop/bin/Debug/net5.0-windows/ScreenDrawDesktop.exe
+release - Shortcut.lnk
