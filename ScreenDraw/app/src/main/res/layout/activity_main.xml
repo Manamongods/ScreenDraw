@@ -34,7 +34,7 @@
             android:layout_below="@id/usbButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:hint="IP Address"
+            android:hint="IP Address (For Wi-Fi Direct, not USB)"
             android:layout_gravity="center_horizontal"
             android:inputType="text" />
 
@@ -44,7 +44,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="Connect with Wi-Fi Direct" />
+            android:text="Connect using Wi-Fi Direct (This is much choppier than USB)" />
     </RelativeLayout>
 
     <com.example.screendraw.HoverView

@@ -26,26 +26,29 @@ float ctrlUpThreshold = -1.0f; // Up threshold when a ctrl key is held
 #define LOCAL_PORT 8987 // The port on this PC. When using Wi-Fi direct (not USB debugging (when USE_USB is false)), this should then match the port text field in the android device.
 #define REMOTE_PORT 8987 // Used when USE_USB is true (and pressing the usb button in android), and in that case it should match the port text field in the android device.
 
-#define CLICK_MOUSE_DONT_DRAW true // If true then when CLICK_MOUSE is true, it won't draw on the screen
+#define CLICK_MOUSE_DONT_DRAW true // If true then when clickMouse is true, it won't draw on the screen
 
 DirectX::XMFLOAT4 drawColors[]
 {
 	{1.0f,0.0f,0.0f,1.0f}, // Red
 	{0.0f,1.0f,0.0f,1.0f}, // Green
 	{0.0f,0.0f,1.0f,1.0f}, // Blue
+	{0.0f,0.0f,0.0f,1.0f}, // Black
+	{1.0f,1.0f,1.0f,1.0f}, // White
 };
 
-// These remap and crop a rectangle inside the android device's screen to the x=0 to x=1 and y=0 to y=1 ranges of the computer screen.
+// These remap and crop a rectangle inside the android device's screen to the x=0 to x=1 and y=0 to y=1 ranges of the computer screen. 
 #define ROTATIONS 0
 #define FLIP_Y false
 #define FLIP_X false
+// (The following can be negative or greater than 1.0f if you want to "crop" the region on the computer screen instead)
 #define LEFT 0.0f
 #define RIGHT 1.0f
 #define TOP 0.0f
 #define BOTTOM 1.0f
 
-
 #define MOUSE_MIN_DIST 2.0f // Distance for the pen position to move in monitor pixels before it updates the mouse position (maybe this helps performance IDK). Sometimes this setting is ignored.
+
 
 #define BATCH 8 // How many events are received at once (maybe this can marginally affect smoothness as the receiving thread makes this batch available immediately before reading more in case a lot arrived at once. IDK.). The android app has a corresponding setting. Probably not so important.
 
@@ -53,11 +56,11 @@ DirectX::XMFLOAT4 drawColors[]
 
 int drawColorID = 0;
 
-bool CLICK_MOUSE = false;
+bool clickMouse = false;
 
-int HZ = 144;
-int WIDTH = 420;
-int HEIGHT = 69;
+int hz = 144;
+int width = 420;
+int height = 69;
 
 #include "framework.h"
 #include "ScreenDrawDesktop.h"
@@ -88,13 +91,16 @@ IDXGISwapChain* pSwapChain = nullptr;
 ID3D11RenderTargetView* pRenderTargetView = nullptr;
 //ID3D11RenderTargetView* pTempRenderTargetView = nullptr;
 
+#define TRANSPARENT_R 1
+#define TRANSPARENT_R_FLOAT (TRANSPARENT_R / 255.0f)
+
 void InitDirectX(HWND hWnd)
 {
 	DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
-	swapChainDesc.BufferDesc.Width = WIDTH;
-	swapChainDesc.BufferDesc.Height = HEIGHT;
+	swapChainDesc.BufferDesc.Width = width;
+	swapChainDesc.BufferDesc.Height = height;
 	swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.BufferDesc.RefreshRate.Numerator = HZ;
+	swapChainDesc.BufferDesc.RefreshRate.Numerator = hz;
 	swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
 	swapChainDesc.SampleDesc.Count = 1;
 	swapChainDesc.SampleDesc.Quality = 0;
@@ -114,8 +120,8 @@ void InitDirectX(HWND hWnd)
 
 	//ID3D11Texture2D* pRenderTargetTexture;
 	//D3D11_TEXTURE2D_DESC textureDesc = {};
-	//textureDesc.Width = WIDTH;
-	//textureDesc.Height = HEIGHT;
+	//textureDesc.Width = width;
+	//textureDesc.Height = height;
 	//textureDesc.MipLevels = 1;
 	//textureDesc.ArraySize = 1;
 	//textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -131,15 +137,15 @@ void InitDirectX(HWND hWnd)
 	pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
 
 	D3D11_VIEWPORT vp;
-	vp.Width = WIDTH;
-	vp.Height = HEIGHT;
+	vp.Width = width;
+	vp.Height = height;
 	vp.MinDepth = 0.0f;
 	vp.MaxDepth = 1.0f;
 	vp.TopLeftX = 0;
 	vp.TopLeftY = 0;
 	pDeviceContext->RSSetViewports(1, &vp);
 
-	float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float ClearColor[4] = { TRANSPARENT_R_FLOAT, 0.0f, 0.0f, 0.0f };
 	pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
 }
 
@@ -189,8 +195,8 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 	if (positions.size() == 0)
 		return;
 
-	float IW = 1.0f / WIDTH;
-	float IH = 1.0f / HEIGHT;
+	float IW = 1.0f / width;
+	float IH = 1.0f / height;
 
 	std::vector<Vertex> vertices;
 	for (const auto& pos : positions)
@@ -201,7 +207,7 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 		if (pos.z != (float)DOWN)
 		{
 			float s;
-			DirectX::XMFLOAT4 color{ 0.0f, 0.0f, 0.0f, 0.0f };
+			DirectX::XMFLOAT4 color{ TRANSPARENT_R_FLOAT, 0.0f, 0.0f, 0.0f };
 			if (erasing || keyErase)
 			{
 				s = keyErase ? keyEraseSize : eraseSize;
@@ -388,8 +394,8 @@ void Update()
 			//std::cerr << type << " - Point: " << x << ", " << y << ", pressure: " << pressure << std::endl;
 
 			static float prevx, prevy;
-			float dx = (x - prevx) * WIDTH;
-			float dy = (y - prevy) * HEIGHT;
+			float dx = (x - prevx) * width;
+			float dy = (y - prevy) * height;
 			float dist = std::sqrt(dx * dx + dy * dy);
 
 			loc += 5 * 4;
@@ -406,7 +412,7 @@ void Update()
 
 				UINT flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
 
-				if (CLICK_MOUSE)
+				if (clickMouse)
 				{
 					if (type == 1)
 						flags |= MOUSEEVENTF_LEFTDOWN;
@@ -417,7 +423,7 @@ void Update()
 			}
 		}
 
-		if ((!CLICK_MOUSE || !CLICK_MOUSE_DONT_DRAW) && points.size() > 0)
+		if ((!clickMouse || !CLICK_MOUSE_DONT_DRAW) && points.size() > 0)
 		{
 			RenderLines(points);
 
@@ -491,7 +497,7 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 void UpdateIcon()
 {
 	std::cout << "Updated Icon. Paused: " << paused << std::endl;
-	HICON hNewIcon = LoadIcon(hInst, MAKEINTRESOURCE(paused ? IDI_SCREENDRAWINACTIVE : (CLICK_MOUSE ? IDI_SCREENDRAWACTIVECLICK : IDI_SCREENDRAWACTIVE)));
+	HICON hNewIcon = LoadIcon(hInst, MAKEINTRESOURCE(paused ? IDI_SCREENDRAWINACTIVE : (clickMouse ? IDI_SCREENDRAWACTIVECLICK : IDI_SCREENDRAWACTIVE)));
 	SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hNewIcon);
 	SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hNewIcon);
 }
@@ -522,7 +528,7 @@ void UpdateThread()
 		if (clear)
 		{
 			clear = false;
-			float ClearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			float ClearColor[4] = { TRANSPARENT_R_FLOAT, 0.0f, 0.0f, 0.0f };
 			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
 			pSwapChain->Present(0, 0);
 		}
@@ -590,7 +596,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 		}
 		if (pKeyInfo->vkCode == TOGGLE_CLICK_KEY && wParam == WM_KEYDOWN)
 		{
-			CLICK_MOUSE = !CLICK_MOUSE;
+			clickMouse = !clickMouse;
 			UpdateIcon();
 			return 1;
 		}
@@ -843,11 +849,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
 
-	WIDTH = GetSystemMetrics(SM_CXSCREEN);
-	HEIGHT = GetSystemMetrics(SM_CYSCREEN);
+	width = GetSystemMetrics(SM_CXSCREEN);
+	height = GetSystemMetrics(SM_CYSCREEN);
 
 	hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
-		0, 0, WIDTH - TASKBAR_HACK, HEIGHT, nullptr, nullptr, hInstance, nullptr); //CW_USEDEFAULT
+		0, 0, width - TASKBAR_HACK, height, nullptr, nullptr, hInstance, nullptr); //CW_USEDEFAULT
 
 	if (!hWnd)
 	{
@@ -868,14 +874,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	//ShowWindow(hWnd, SW_SHOWNA);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
-	SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+	SetLayeredWindowAttributes(hWnd, RGB(TRANSPARENT_R, 0, 0), 0, LWA_COLORKEY);
 	HDC hdc = GetDC(0);
 	DEVMODE devMode;
 	devMode.dmSize = sizeof(devMode);
 	EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devMode);
-	HZ = devMode.dmDisplayFrequency;
+	hz = devMode.dmDisplayFrequency;
 	ReleaseDC(0, hdc);
-	std::cout << "Refresh Rate: " << HZ << " Hz" << std::endl;
+	std::cout << "Refresh Rate: " << hz << " Hz" << std::endl;
 
 	return TRUE;
 }
