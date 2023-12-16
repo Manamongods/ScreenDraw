@@ -18,6 +18,9 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
+import java.net.SocketAddress;
+import java.net.InetSocketAddress;
+import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity {
     int BATCH = 8;
@@ -91,6 +94,8 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    boolean usingUSB = false;
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -99,10 +104,6 @@ public class MainActivity extends AppCompatActivity {
 
         wifiP2pManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
         channel = wifiP2pManager.initialize(this, getMainLooper(), null);
-
-        Thread t = new Thread(new Do());
-        t.setPriority(10);
-        t.start();
 
         HoverView surfaceView = findViewById(R.id.hoverView);
         surfaceView.setVisibility(View.GONE);
@@ -113,12 +114,19 @@ public class MainActivity extends AppCompatActivity {
                 | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
         decorView.setSystemUiVisibility(uiOptions);
 
+        Button usbButton = findViewById(R.id.usbButton);
+
         ipAddressET = findViewById(R.id.ipAddress);
         portET = findViewById(R.id.port);
         Button button = findViewById(R.id.button);
         sharedPreferences = getSharedPreferences(SHARED_PREFS, MODE_PRIVATE);
         ipAddressET.setText(sharedPreferences.getString(IP_ADDRESS, "000.000.0.000"));
         portET.setText(sharedPreferences.getString(PORT, "8987"));
+
+        usbButton.setOnClickListener(v -> {
+            usingUSB = true;
+            button.callOnClick();
+        });
 
         button.setOnClickListener(v -> {
             ip = ipAddressET.getText().toString();
@@ -135,9 +143,14 @@ public class MainActivity extends AppCompatActivity {
             ipAddressET.setVisibility(View.GONE);
             portET.setVisibility(View.GONE);
             button.setVisibility(View.GONE);
+            usbButton.setVisibility(View.GONE);
 
             surfaceView.setVisibility(View.VISIBLE);
             surfaceView.setOnTouchListener(onTouchListener);
+
+            Thread t = new Thread(new Sending());
+            t.setPriority(10);
+            t.start();
         });
     }
 
@@ -148,7 +161,7 @@ public class MainActivity extends AppCompatActivity {
     }
     LinkedBlockingQueue<Data> toSend = new LinkedBlockingQueue<Data>();
 
-    private class Do implements Runnable {
+    private class Sending implements Runnable {
         private float prevx = 0, prevy = 0;
         private float average = 0;
         private int counter = 0;
@@ -156,9 +169,12 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             while(true) {
+                SocketAddress address = new InetSocketAddress(usingUSB ? "127.0.0.1" : ip, port);
+                Socket socket = new Socket();
+                int timeout = 500;
+                Log.d(TAG, "A");
                 try {
-                    Log.d(TAG, "A");
-                    Socket socket = new Socket(ip, port);
+                    socket.connect(address, timeout);
                     Log.d(TAG, "B");
                     OutputStream outputStream = socket.getOutputStream();
                     DataOutputStream dataOutputStream = new DataOutputStream(outputStream);
@@ -197,9 +213,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                     Log.d(TAG, "E");
                     outputStream.close();
-                    socket.close();
-                } catch (Exception e) {
+                } catch (IOException e) {
                     e.printStackTrace();
+                } finally {
+                    try {
+                        socket.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
 
                 try {

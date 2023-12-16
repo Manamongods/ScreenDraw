@@ -13,16 +13,7 @@
         android:orientation="vertical">
 
         <EditText
-            android:id="@+id/ipAddress"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:hint="IP Address"
-            android:layout_gravity="center_horizontal"
-            android:inputType="text" />
-
-        <EditText
             android:id="@+id/port"
-            android:layout_below="@id/ipAddress"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:hint="Port"
@@ -31,12 +22,29 @@
             android:maxLength="4" />
 
         <Button
-            android:id="@+id/button"
+            android:id="@+id/usbButton"
+            android:layout_below="@id/port"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@id/port"
             android:layout_gravity="center"
-            android:text="Submit" />
+            android:text="Connect with USB Debugging (using adb port reversing (the opposite of adb port forwarding))" />
+
+        <EditText
+            android:id="@+id/ipAddress"
+            android:layout_below="@id/usbButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:hint="IP Address"
+            android:layout_gravity="center_horizontal"
+            android:inputType="text" />
+
+        <Button
+            android:id="@+id/button"
+            android:layout_below="@id/ipAddress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="Connect with Wi-Fi Direct" />
     </RelativeLayout>
 
     <com.example.screendraw.HoverView

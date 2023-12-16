@@ -1,0 +1,1 @@
+start "" "D:\ScreenDraw\ScreenDrawDesktop\x64\Release\ScreenDrawDesktop.exe"

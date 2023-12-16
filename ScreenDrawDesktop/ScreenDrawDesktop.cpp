@@ -1,9 +1,5 @@
-// ScreenDrawDesktop.cpp : Defines the entry point for the application.
-//
-
 #include "framework.h"
 #include "ScreenDrawDesktop.h"
-
 #include <d3d11.h>
 #include <D3Dcompiler.h>
 #include <dxgi.h>
@@ -29,8 +25,13 @@ float ctrlUpThreshold = -1.0f;
 
 //#define CLICK_MOUSE
 
-#define MOUSE_MIN_DIST 5.0f
-#define BATCH 8
+#define MOUSE_MIN_DIST 5.0f // Min distance for the pen position to move in monitor pixels for it to update the mouse position (maybe this helps performance IDK)
+#define BATCH 8 // How many events are received at once (maybe this can marginally affect smoothness as the receiving thread makes this batch available immediately before reading more in case a lot arrived at once. IDK.)
+#define USE_USB true
+#define ADB "adb" //Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
+
+#define LOCAL_PORT 8987 // The port on this PC. When using Wi-Fi direct (not USB debugging (USE_USB==false)), this should match the port text field in the android device.
+#define REMOTE_PORT 8987 // Used when USE_USB is true (and pressing the usb button in android), and in that case it should match the port text field in the android device.
 
 #define DRAW_COLOR_COUNT 3
 DirectX::XMFLOAT4 drawColors[DRAW_COLOR_COUNT]
@@ -39,13 +40,12 @@ DirectX::XMFLOAT4 drawColors[DRAW_COLOR_COUNT]
 	{0.0f,1.0f,0.0f,1.0f},
 	{0.0f,0.0f,1.0f,1.0f},
 };
-int drawColorID = 0;
+int drawColorID = 0; // Cycles through drawColors with the E button
 
 int WIDTH = 420; // 3440;
 int HEIGHT = 69; // 1440;
 
-// Simply makes it so the window doesn't take up the whole screen, so it doesn't hide the taskbar if there's another fullscreen application in the background or something
-#define TASKBAR_HACK 1
+#define TASKBAR_HACK 1 // Simply makes it so the window doesn't take up the whole screen, so it doesn't hide the taskbar if there's another fullscreen application in the background or something
 
 struct Vertex
 {
@@ -58,8 +58,8 @@ struct Vertex
 #include <WS2tcpip.h>
 #include <cstdio>
 
-SOCKET listenSocket = NULL;
-SOCKET clientSocket = NULL;
+SOCKET listenSocket = INVALID_SOCKET;
+SOCKET clientSocket = INVALID_SOCKET;
 
 ID3D11Device* pDevice = nullptr;
 ID3D11DeviceContext* pDeviceContext = nullptr;
@@ -405,22 +405,22 @@ void ReceiveThread()
 			continue;
 		}
 
-		if (clientSocket == NULL)
+		if (clientSocket == INVALID_SOCKET)
 		{
 			std::cout << "Waiting for incoming connections..." << std::endl;
 
 			clientSocket = accept(listenSocket, NULL, NULL);
+
 			if (clientSocket == INVALID_SOCKET)
 			{
 				std::cerr << "Accept failed with error: " << WSAGetLastError() << std::endl;
-				clientSocket = NULL;
 				continue;
 			}
 
 			std::cout << "Client connected!" << std::endl;
 		}
 
-		constexpr int S = (5 * 4) * BATCH; //16
+		constexpr int S = (5 * 4) * BATCH;
 		char recvBuffer[S];
 		int recvResult;
 		recvResult = recv(clientSocket, recvBuffer, S, 0);
@@ -434,9 +434,10 @@ void ReceiveThread()
 		}
 		else if (recvResult == 0)
 		{
-			//closesocket(clientSocket);
-			clientSocket = NULL;
+			closesocket(clientSocket);
+			clientSocket = INVALID_SOCKET;
 			std::cout << "Connection closed by peer." << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 			continue;
 		}
 		else
@@ -462,11 +463,13 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
 void UpdateIcon()
 {
+	std::cout << "Updated Icon. Paused: " << paused << std::endl;
 	HICON hNewIcon = LoadIcon(hInst, MAKEINTRESOURCE(paused ? IDI_SCREENDRAWINACTIVE : IDI_SCREENDRAWACTIVE));
 	SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hNewIcon);
 	SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hNewIcon);
 }
 
+#define SOME_COOLDOWN 0.5 // (Seconds)
 void UpdateThread()
 {
 	while (running)
@@ -475,7 +478,16 @@ void UpdateThread()
 		if (fw == hWnd)
 		{
 			if (previousFocusedWindow)
-				SetForegroundWindow(previousFocusedWindow);
+			{
+				static std::chrono::steady_clock::time_point lastTime = std::chrono::steady_clock::now();
+				std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
+				std::chrono::duration<double> duration = currentTime - lastTime;
+				if (duration.count() > SOME_COOLDOWN)
+				{
+					lastTime = currentTime;
+					SetForegroundWindow(previousFocusedWindow);
+				}
+			}
 		}
 		else if (fw != NULL)
 			previousFocusedWindow = fw;
@@ -586,6 +598,37 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 	return CallNextHookEx(keyboardHook, nCode, wParam, lParam);
 }
 
+void Cleanup()
+{
+	if (clientSocket != INVALID_SOCKET)
+		closesocket(clientSocket);
+	closesocket(listenSocket);
+	WSACleanup();
+
+	if (pVertexBuffer)
+		pVertexBuffer->Release();
+	pVertexBuffer = NULL;
+
+	if (pVertexShader)
+		pVertexShader->Release();
+	pVertexShader = NULL;
+
+	if (pPixelShader)
+		pPixelShader->Release();
+	pPixelShader = NULL;
+
+	if (pInputLayout)
+		pInputLayout->Release();
+	pInputLayout = NULL;
+
+	if (pRasterizerState)
+		pRasterizerState->Release();
+	pRasterizerState = NULL;
+
+	if (pDepthStencilState)
+		pDepthStencilState->Release();
+	pDepthStencilState = NULL;
+}
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR    lpCmdLine,
@@ -596,17 +639,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	SetProcessDPIAware(); //SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
-	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_SCREENDRAWDESKTOP, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
 
-	// Perform application initialization:
 	if (!InitInstance(hInstance, nCmdShow))
-	{
 		return FALSE;
-	}
-
 
 	std::ofstream file("ScreenDraw.log");
 	if (!file.is_open())
@@ -615,15 +653,29 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	std::cout.rdbuf(file.rdbuf());
 	std::clog.rdbuf(file.rdbuf());
 
+	if (USE_USB)
+	{
+		//system("command > ScreenDraw.log");
+		std::string adbCommand = std::string(ADB) + " reverse tcp:" + std::to_string(LOCAL_PORT) + " tcp:" + std::to_string(REMOTE_PORT);
+		std::cerr << "ADB Command: " << adbCommand.c_str() << std::endl;
+		int result = system(adbCommand.c_str());
+		if (result == 0)
+			std::cerr << "adb reversing succeeded!" << std::endl;
+		else
+			std::cerr << "adb reversing failed: " << result << std::endl;
+	}
+
 	WSADATA wsaData;
 	int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (result != 0) {
+	if (result != 0)
+	{
 		std::cerr << "WSAStartup failed with error: " << result << std::endl;
 		return 1;
 	}
 
-	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (listenSocket == INVALID_SOCKET) {
+	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); //TODO: try UDP?
+	if (listenSocket == INVALID_SOCKET)
+	{
 		std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
 		WSACleanup();
 		return 1;
@@ -632,21 +684,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	sockaddr_in serverAddr;
 	serverAddr.sin_family = AF_INET;
 	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	serverAddr.sin_port = htons(8987);
+	serverAddr.sin_port = htons(LOCAL_PORT);
 
 	if (bind(listenSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
 	{
 		std::cerr << "Bind failed with error: " << WSAGetLastError() << std::endl;
-		closesocket(listenSocket);
-		WSACleanup();
+		if (result == WSAEADDRINUSE)
+			std::cerr << result << " (WSAEADDRINUSE) supposedly means the port is already in use." << std::endl;
+		Cleanup();
 		return 1;
 	}
 
 	if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
 	{
 		std::cerr << "Listen failed with error: " << WSAGetLastError() << std::endl;
-		closesocket(listenSocket);
-		WSACleanup();
+		Cleanup();
 		return 1;
 	}
 
@@ -656,11 +708,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	pSwapChain->Present(0, 0);
 
-
 	std::thread receiveThread(ReceiveThread);
 	if (!SetThreadPriority(receiveThread.native_handle(), THREAD_PRIORITY_HIGHEST))
 		std::cerr << "Failed to change thread priority.\n";
-
 
 	ID3DBlob* pErrorBlob = nullptr;
 	ID3DBlob* pVertexShaderBlob = nullptr;
@@ -673,12 +723,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			std::cerr << errorMsg << hr << std::endl;
 			pErrorBlob->Release();
 		}
+		Cleanup();
 		return 1;
 	}
 	hr = pDevice->CreateVertexShader(pVertexShaderBlob->GetBufferPointer(), pVertexShaderBlob->GetBufferSize(), nullptr, &pVertexShader);
 	if (FAILED(hr))
 	{
 		std::cerr << "No VS: " << hr << std::endl;
+		Cleanup();
 		return 1;
 	}
 	ID3DBlob* pPixelShaderBlob = nullptr;
@@ -691,12 +743,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			std::cerr << errorMsg << hr << std::endl;
 			pErrorBlob->Release();
 		}
+		Cleanup();
 		return 1;
 	}
 	hr = pDevice->CreatePixelShader(pPixelShaderBlob->GetBufferPointer(), pPixelShaderBlob->GetBufferSize(), nullptr, &pPixelShader);
 	if (FAILED(hr))
 	{
 		std::cerr << "No PS: " << hr << std::endl;
+		Cleanup();
 		return 1;
 	}
 
@@ -750,25 +804,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 	std::cerr << "Ending?" << std::endl;
 
-	if (pVertexBuffer)
-		pVertexBuffer->Release();
-	pVertexBuffer = NULL;
+	Cleanup();
 
-	if (clientSocket != NULL)
-		closesocket(clientSocket);
-	closesocket(listenSocket);
-	WSACleanup();
-
-	return !running ? 1 : (int)msg.wParam;
+	return (int)msg.wParam;
 }
 
-
-
-//
-//  FUNCTION: MyRegisterClass()
-//
-//  PURPOSE: Registers the window class.
-//
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
 	WNDCLASSEXW wcex;
@@ -790,16 +830,6 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	return RegisterClassExW(&wcex);
 }
 
-//
-//   FUNCTION: InitInstance(HINSTANCE, int)
-//
-//   PURPOSE: Saves instance handle and creates main window
-//
-//   COMMENTS:
-//
-//        In this function, we save the instance handle in a global variable and
-//        create and display the main program window.
-//
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
@@ -834,16 +864,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 
-//
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE: Processes messages for the main window.
-//
-//  WM_COMMAND  - process the application menu
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
-//
-//
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
