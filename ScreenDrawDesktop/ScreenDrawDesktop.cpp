@@ -1,62 +1,83 @@
+#include <DirectXMath.h>
+
+
+// Settings
+
+const float drawSize0 = 4.0f; // Draw size at pressure 0%
+const float drawSize1 = 4.0f; // Draw size at pressure 100%
+const float eraseSize = 200.0f; // Size of eraser when using the eraser button on your stylus
+const float keyEraseSize = 100.0f; // Size of eraser when holding ERASE_KEY
+
+float downThreshold = 0.45f; // Pressure threshold to activate drawing/erasing
+float upThreshold = 0.25f; // Pressure threshold to deactivate drawing/erasing
+float ctrlDownThreshold = -1.0f; // Down threshold when a ctrl key is held
+float ctrlUpThreshold = -1.0f; // Up threshold when a ctrl key is held
+
+// Note that if you want to change these to non alphanumeric keys, you need to use the VK_ defines found in WinUser.h such as: VK_SHIFT, VK_TAB, VK_F1, etc.
+#define CLEAR_KEY 'Q'
+#define ERASE_KEY 'W'
+#define CYCLE_COLOR_KEY 'E'
+#define TOGGLE_CLICK_KEY 'R'
+#define PAUSE_KEY 'T'
+
+#define USE_USB true // If this is false, then it is much less smooth (using Wi-Fi Direct). But your android device needs to be connected with USB and have USB Debugging enabled (which is found in developer settings).
+#define ADB "adb" // Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
+
+#define LOCAL_PORT 8987 // The port on this PC. When using Wi-Fi direct (not USB debugging (when USE_USB is false)), this should then match the port text field in the android device.
+#define REMOTE_PORT 8987 // Used when USE_USB is true (and pressing the usb button in android), and in that case it should match the port text field in the android device.
+
+#define CLICK_MOUSE_DONT_DRAW true // If true then when CLICK_MOUSE is true, it won't draw on the screen
+
+DirectX::XMFLOAT4 drawColors[]
+{
+	{1.0f,0.0f,0.0f,1.0f}, // Red
+	{0.0f,1.0f,0.0f,1.0f}, // Green
+	{0.0f,0.0f,1.0f,1.0f}, // Blue
+};
+
+// These remap and crop a rectangle inside the android device's screen to the x=0 to x=1 and y=0 to y=1 ranges of the computer screen.
+#define ROTATIONS 0
+#define FLIP_Y false
+#define FLIP_X false
+#define LEFT 0.0f
+#define RIGHT 1.0f
+#define TOP 0.0f
+#define BOTTOM 1.0f
+
+
+#define MOUSE_MIN_DIST 2.0f // Distance for the pen position to move in monitor pixels before it updates the mouse position (maybe this helps performance IDK). Sometimes this setting is ignored.
+
+#define BATCH 8 // How many events are received at once (maybe this can marginally affect smoothness as the receiving thread makes this batch available immediately before reading more in case a lot arrived at once. IDK.). The android app has a corresponding setting. Probably not so important.
+
+#define TASKBAR_HACK 1 // Simply makes it so the window doesn't take up the whole screen, so it doesn't hide the taskbar if there's another fullscreen application in the background or something
+
+int drawColorID = 0;
+
+bool CLICK_MOUSE = false;
+
+int HZ = 144;
+int WIDTH = 420;
+int HEIGHT = 69;
+
 #include "framework.h"
 #include "ScreenDrawDesktop.h"
 #include <d3d11.h>
 #include <D3Dcompiler.h>
-#include <dxgi.h>
-#include <DirectXMath.h>
 #include <vector>
-#include <sstream>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <thread>
 #include <mutex>
-
-int HZ = 144;
-const float drawSize0 = 4.0f;
-const float drawSize1 = 4.0f;
-const float eraseSize = 200.0f;
-const float keyEraseSize = 100.0f; // For when holding W
-
-float downThreshold = 0.45f;
-float upThreshold = 0.25f;
-float ctrlDownThreshold = -1.0f;
-float ctrlUpThreshold = -1.0f;
-
-//#define CLICK_MOUSE
-
-#define MOUSE_MIN_DIST 5.0f // Min distance for the pen position to move in monitor pixels for it to update the mouse position (maybe this helps performance IDK)
-#define BATCH 8 // How many events are received at once (maybe this can marginally affect smoothness as the receiving thread makes this batch available immediately before reading more in case a lot arrived at once. IDK.)
-#define USE_USB true
-#define ADB "adb" //Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
-
-#define LOCAL_PORT 8987 // The port on this PC. When using Wi-Fi direct (not USB debugging (USE_USB==false)), this should match the port text field in the android device.
-#define REMOTE_PORT 8987 // Used when USE_USB is true (and pressing the usb button in android), and in that case it should match the port text field in the android device.
-
-#define DRAW_COLOR_COUNT 3
-DirectX::XMFLOAT4 drawColors[DRAW_COLOR_COUNT]
-{
-	{1.0f,0.0f,0.0f,1.0f},
-	{0.0f,1.0f,0.0f,1.0f},
-	{0.0f,0.0f,1.0f,1.0f},
-};
-int drawColorID = 0; // Cycles through drawColors with the E button
-
-int WIDTH = 420; // 3440;
-int HEIGHT = 69; // 1440;
-
-#define TASKBAR_HACK 1 // Simply makes it so the window doesn't take up the whole screen, so it doesn't hide the taskbar if there's another fullscreen application in the background or something
+#include <iostream>
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <cstdio>
 
 struct Vertex
 {
 	DirectX::XMFLOAT4 position;
 	DirectX::XMFLOAT4 color;
 };
-
-#include <iostream>
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#include <cstdio>
 
 SOCKET listenSocket = INVALID_SOCKET;
 SOCKET clientSocket = INVALID_SOCKET;
@@ -278,8 +299,8 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 	pDeviceContext->Draw(static_cast<UINT>(vertices.size()), 0);
 }
 
-std::mutex mutex; // Lock for data0
 std::vector<char> data0;
+std::mutex data0Mutex;
 std::vector<char> data1;
 
 bool paused = true;
@@ -291,16 +312,14 @@ void Update()
 {
 	//std::cerr << "Update" << std::endl;
 
-	mutex.lock();
+	data0Mutex.lock();
 	data1.resize(data0.size());
 	memcpy(data1.data(), data0.data(), data0.size());
 	data0.clear();
-	mutex.unlock();
+	data0Mutex.unlock();
 
 	if (data1.size() > 0)
 	{
-		//std::cout << "Received: " << std::string(recvBuffer, recvResult) << std::endl;
-
 		std::vector<DirectX::XMFLOAT4> points;
 
 		int loc = 0;
@@ -312,6 +331,20 @@ void Update()
 			int inputType = *((int*)b + 1);
 			float x = *((float*)b + 2);
 			float y = *((float*)b + 3);
+
+			for (int i = 0; i < ROTATIONS; i++)
+			{
+				float temp = x;
+				x = 1.0f - y;
+				y = temp;
+			}
+			if (FLIP_X)
+				x = 1.0f - x;
+			if (FLIP_Y)
+				y = 1.0f - y;
+			x = max(0.0f, min(1.0f, (x - LEFT) / (RIGHT - LEFT)));
+			y = max(0.0f, min(1.0f, (y - TOP) / (BOTTOM - TOP)));
+
 			float pressure = *((float*)b + 4);
 
 			int type = CONTINUE;
@@ -372,21 +405,19 @@ void Update()
 				int yy = (int)y;
 
 				UINT flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
-#if 0
-				SetCursorPos(prevx * WIDTH, prevy * HEIGHT);
-#else
-#ifdef CLICK_MOUSE
-				if (type == 1)
-					flags |= MOUSEEVENTF_LEFTDOWN;
-				else if (type == 2)
-					flags |= MOUSEEVENTF_LEFTUP;
-#endif
-				mouse_event(flags, xx, yy, 0, 0); // TODO: Should this be called so often?
-#endif
+
+				if (CLICK_MOUSE)
+				{
+					if (type == 1)
+						flags |= MOUSEEVENTF_LEFTDOWN;
+					else if (type == 2)
+						flags |= MOUSEEVENTF_LEFTUP;
+				}
+				mouse_event(flags, xx, yy, 0, 0);
 			}
 		}
 
-		if (points.size() > 0)
+		if ((!CLICK_MOUSE || !CLICK_MOUSE_DONT_DRAW) && points.size() > 0)
 		{
 			RenderLines(points);
 
@@ -426,11 +457,11 @@ void ReceiveThread()
 		recvResult = recv(clientSocket, recvBuffer, S, 0);
 		if (recvResult > 0)
 		{
-			mutex.lock();
+			data0Mutex.lock();
 			int c = data0.size();
 			data0.resize(c + recvResult);
 			memcpy(data0.data() + c, recvBuffer, recvResult);
-			mutex.unlock();
+			data0Mutex.unlock();
 		}
 		else if (recvResult == 0)
 		{
@@ -451,10 +482,6 @@ void ReceiveThread()
 HWND hWnd = NULL;
 HWND previousFocusedWindow = NULL;
 
-static bool qPressed = false;
-static bool wPressed = false;
-static bool ePressed = false;
-
 #define MAX_LOADSTRING 100
 
 HINSTANCE hInst;                                // current instance
@@ -464,7 +491,7 @@ WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 void UpdateIcon()
 {
 	std::cout << "Updated Icon. Paused: " << paused << std::endl;
-	HICON hNewIcon = LoadIcon(hInst, MAKEINTRESOURCE(paused ? IDI_SCREENDRAWINACTIVE : IDI_SCREENDRAWACTIVE));
+	HICON hNewIcon = LoadIcon(hInst, MAKEINTRESOURCE(paused ? IDI_SCREENDRAWINACTIVE : (CLICK_MOUSE ? IDI_SCREENDRAWACTIVECLICK : IDI_SCREENDRAWACTIVE)));
 	SendMessage(hWnd, WM_SETICON, ICON_SMALL, (LPARAM)hNewIcon);
 	SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hNewIcon);
 }
@@ -491,31 +518,6 @@ void UpdateThread()
 		}
 		else if (fw != NULL)
 			previousFocusedWindow = fw;
-
-		if (!paused && qPressed && wPressed && ePressed)
-		{
-			qPressed = wPressed = ePressed = false;
-			paused = true;
-			UpdateIcon();
-			clear = true;
-			keyErase = false;
-			drawColorID = 0;
-
-			/*running = false;
-			clear = false;
-
-			float ClearColor[4] = { 0.0f, 0.1f, 0.1f, 1.0f };
-			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
-			pSwapChain->Present(0, 0);
-
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-			float ClearColor2[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor2);
-			pSwapChain->Present(0, 0);
-
-			PostQuitMessage(0);*/
-		}
 
 		if (clear)
 		{
@@ -561,37 +563,44 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 			else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
 				ctrling = false;
 		}
-		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYDOWN)
+		if (pKeyInfo->vkCode == CLEAR_KEY && wParam == WM_KEYDOWN)
 		{
-			qPressed = true;
 			clear = true;
 			return 1;
 		}
-		if (pKeyInfo->vkCode == 'Q' && wParam == WM_KEYUP)
+		if (pKeyInfo->vkCode == CLEAR_KEY && wParam == WM_KEYUP)
 		{
-			qPressed = false;
 			return 1;
 		}
-		if (pKeyInfo->vkCode == 'W' && wParam == WM_KEYDOWN)
+		if (pKeyInfo->vkCode == ERASE_KEY && wParam == WM_KEYDOWN)
 		{
-			wPressed = keyErase = true;
+			keyErase = true;
 			return 1;
 		}
-		if (pKeyInfo->vkCode == 'W' && wParam == WM_KEYUP)
+		if (pKeyInfo->vkCode == ERASE_KEY && wParam == WM_KEYUP)
 		{
-			wPressed = keyErase = false;
+			keyErase = false;
 			return 1;
 		}
-		if (pKeyInfo->vkCode == 'E' && wParam == WM_KEYDOWN)
+		if (pKeyInfo->vkCode == CYCLE_COLOR_KEY && wParam == WM_KEYDOWN)
 		{
-			ePressed = true;
 			drawColorID++;
-			drawColorID = drawColorID % DRAW_COLOR_COUNT;
+			drawColorID = drawColorID % (sizeof(drawColors) / sizeof(drawColors[0]));
 			return 1;
 		}
-		if (pKeyInfo->vkCode == 'E' && wParam == WM_KEYUP)
+		if (pKeyInfo->vkCode == TOGGLE_CLICK_KEY && wParam == WM_KEYDOWN)
 		{
-			ePressed = false;
+			CLICK_MOUSE = !CLICK_MOUSE;
+			UpdateIcon();
+			return 1;
+		}
+		if (pKeyInfo->vkCode == PAUSE_KEY && wParam == WM_KEYDOWN)
+		{
+			paused = true;
+			UpdateIcon();
+			clear = true;
+			keyErase = false;
+			drawColorID = 0;
 			return 1;
 		}
 	}
@@ -643,15 +652,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	LoadStringW(hInstance, IDC_SCREENDRAWDESKTOP, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
 
-	if (!InitInstance(hInstance, nCmdShow))
-		return FALSE;
-
 	std::ofstream file("ScreenDraw.log");
 	if (!file.is_open())
 		return 1;
 	std::cerr.rdbuf(file.rdbuf());
 	std::cout.rdbuf(file.rdbuf());
 	std::clog.rdbuf(file.rdbuf());
+
+	if (!InitInstance(hInstance, nCmdShow))
+		return FALSE;
 
 	if (USE_USB)
 	{
@@ -860,6 +869,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+	HDC hdc = GetDC(0);
+	DEVMODE devMode;
+	devMode.dmSize = sizeof(devMode);
+	EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devMode);
+	HZ = devMode.dmDisplayFrequency;
+	ReleaseDC(0, hdc);
+	std::cout << "Refresh Rate: " << HZ << " Hz" << std::endl;
 
 	return TRUE;
 }
