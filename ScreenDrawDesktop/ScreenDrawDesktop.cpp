@@ -20,7 +20,7 @@ float ctrlUpThreshold = -1.0f; // Up threshold when a ctrl key is held
 #define TOGGLE_CLICK_KEY 'R'
 #define PAUSE_KEY 'T'
 
-#define USE_USB true // If this is false, then it is much less smooth (using Wi-Fi Direct). But your android device needs to be connected with USB and have USB Debugging enabled (which is found in developer settings).
+#define USE_USB true // If this is false, then it is much less smooth (using Wi-Fi Direct). But if true your android device needs to be connected with USB and have USB Debugging enabled (which is found in developer settings).
 #define ADB "adb" // Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
 
 #define LOCAL_PORT 8987 // The port on this PC. When using Wi-Fi direct (not USB debugging (when USE_USB is false)), this should then match the port text field in the android device.
@@ -37,7 +37,7 @@ DirectX::XMFLOAT4 drawColors[]
 	{1.0f,1.0f,1.0f,1.0f}, // White
 };
 
-// These remap and crop a rectangle inside the android device's screen to the x=0 to x=1 and y=0 to y=1 ranges of the computer screen. 
+// These remap and crop a rectangle inside the android device's screen to the normalized x=0 to x=1 and y=0 to y=1 ranges of the computer screen. 
 #define ROTATIONS 0
 #define FLIP_Y false
 #define FLIP_X false
