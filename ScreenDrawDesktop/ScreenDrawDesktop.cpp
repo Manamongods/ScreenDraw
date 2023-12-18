@@ -34,7 +34,7 @@ DirectX::XMFLOAT4 drawColors[]
 	{0.0f,1.0f,0.0f,1.0f}, // Green
 	{0.0f,0.0f,1.0f,1.0f}, // Blue
 	{0.0f,0.0f,0.0f,1.0f}, // Black
-	{1.0f,1.0f,1.0f,1.0f}, // White
+	{1.0f,1.0f,254.0f/255.0f,1.0f}, // White (Not quite though because pure white is used for ScreenDraw's color key for transparency (because white seems to be the default window color or something))
 };
 
 // These remap and crop a rectangle inside the android device's screen to the normalized x=0 to x=1 and y=0 to y=1 ranges of the computer screen. 
@@ -53,6 +53,9 @@ DirectX::XMFLOAT4 drawColors[]
 #define BATCH 8 // How many events are received at once (maybe this can marginally affect smoothness as the receiving thread makes this batch available immediately before reading more in case a lot arrived at once. IDK.). The android app has a corresponding setting. Probably not so important.
 
 #define TASKBAR_HACK 1 // Simply makes it so the window doesn't take up the whole screen, so it doesn't hide the taskbar if there's another fullscreen application in the background or something
+
+#define DEFOCUS_COOLDOWN 0.5 // (Seconds)
+#define ENSURE_VISIBLE_COOLDOWN 0.5 // (Seconds)
 
 int drawColorID = 0;
 
@@ -90,9 +93,6 @@ ID3D11DeviceContext* pDeviceContext = nullptr;
 IDXGISwapChain* pSwapChain = nullptr;
 ID3D11RenderTargetView* pRenderTargetView = nullptr;
 //ID3D11RenderTargetView* pTempRenderTargetView = nullptr;
-
-#define TRANSPARENT_R 1
-#define TRANSPARENT_R_FLOAT (TRANSPARENT_R / 255.0f)
 
 void InitDirectX(HWND hWnd)
 {
@@ -145,7 +145,7 @@ void InitDirectX(HWND hWnd)
 	vp.TopLeftY = 0;
 	pDeviceContext->RSSetViewports(1, &vp);
 
-	float ClearColor[4] = { TRANSPARENT_R_FLOAT, 0.0f, 0.0f, 0.0f };
+	float ClearColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
 }
 
@@ -207,7 +207,7 @@ void RenderLines(std::vector<DirectX::XMFLOAT4>& positions)
 		if (pos.z != (float)DOWN)
 		{
 			float s;
-			DirectX::XMFLOAT4 color{ TRANSPARENT_R_FLOAT, 0.0f, 0.0f, 0.0f };
+			DirectX::XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 0.0f };
 			if (erasing || keyErase)
 			{
 				s = keyErase ? keyEraseSize : eraseSize;
@@ -324,6 +324,8 @@ void Update()
 	data0.clear();
 	data0Mutex.unlock();
 
+	bool presented = false;
+
 	if (data1.size() > 0)
 	{
 		std::vector<DirectX::XMFLOAT4> points;
@@ -428,6 +430,18 @@ void Update()
 			RenderLines(points);
 
 			pSwapChain->Present(0, 0);
+
+			presented = true;
+		}
+	}
+	if (!presented)
+	{
+		static std::chrono::steady_clock::time_point lastTime = std::chrono::steady_clock::now();
+		std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
+		std::chrono::duration<double> duration = currentTime - lastTime;
+		if (duration.count() > ENSURE_VISIBLE_COOLDOWN)
+		{
+			pSwapChain->Present(0, 0);
 		}
 	}
 }
@@ -479,7 +493,8 @@ void ReceiveThread()
 		}
 		else
 		{
-			std::cerr << "Receive failed with error: " << WSAGetLastError() << std::endl;
+			std::cerr << "Receive failed with error: " << WSAGetLastError() << " - Sleeping for 100 ms now. " << std::endl;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100)); //? Only for preventing the log file from being spammed
 			continue;
 		}
 	}
@@ -502,7 +517,6 @@ void UpdateIcon()
 	SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hNewIcon);
 }
 
-#define SOME_COOLDOWN 0.5 // (Seconds)
 void UpdateThread()
 {
 	while (running)
@@ -515,7 +529,7 @@ void UpdateThread()
 				static std::chrono::steady_clock::time_point lastTime = std::chrono::steady_clock::now();
 				std::chrono::steady_clock::time_point currentTime = std::chrono::steady_clock::now();
 				std::chrono::duration<double> duration = currentTime - lastTime;
-				if (duration.count() > SOME_COOLDOWN)
+				if (duration.count() > DEFOCUS_COOLDOWN)
 				{
 					lastTime = currentTime;
 					SetForegroundWindow(previousFocusedWindow);
@@ -528,7 +542,7 @@ void UpdateThread()
 		if (clear)
 		{
 			clear = false;
-			float ClearColor[4] = { TRANSPARENT_R_FLOAT, 0.0f, 0.0f, 0.0f };
+			float ClearColor[4] = { 1.0f, 1.0f, 1.0f, 0.0f };
 			pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
 			pSwapChain->Present(0, 0);
 		}
@@ -874,7 +888,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	//ShowWindow(hWnd, SW_SHOWNA);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
-	SetLayeredWindowAttributes(hWnd, RGB(TRANSPARENT_R, 0, 0), 0, LWA_COLORKEY);
+	SetLayeredWindowAttributes(hWnd, RGB(255, 255, 255), 0, LWA_COLORKEY);
 	HDC hdc = GetDC(0);
 	DEVMODE devMode;
 	devMode.dmSize = sizeof(devMode);
