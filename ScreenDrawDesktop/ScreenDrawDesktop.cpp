@@ -20,6 +20,14 @@ float ctrlUpThreshold = 0.0f; // Up threshold when a ctrl key is held
 #define TOGGLE_CLICK_KEY 'R'
 #define PAUSE_KEY 'T'
 
+#define TOGGLE_CONTROL false // Control keys make it so ctrlDownThreshold and ctrlUpThreshold are used
+#define TOGGLE_SHIFT true // Shift keys make it so the stylus moves the cursor relatively, like a touchpad/trackpad, instead of mapping it to screen
+
+#define SHIFTING_SENSITIVITY 5000 // Sensitivity for relative movement when shift key is held/toggled
+#define SHIFTING_SENSITIVITY_X 1.0f // These can be used to make the delta movement unaffected by the aspect ratio difference between the android screen and monitor (if you plan to use both absolute and relative, it's probably better to not)
+#define SHIFTING_SENSITIVITY_Y 1.0f
+#define MICKEY_FACTOR 2000 // Probably a bad way to do it, but the problem is when moving the mouse, it will snap to pixel coordinates (integers) and will lose small movements, so my code accumulates them, but I don't know if there's a way to convert from input to resulting mouse movement, so this does something idk.
+
 #define USE_USB true // If this is false, then it is much less smooth (using Wi-Fi Direct). But if true your android device needs to be connected with USB and have USB Debugging enabled (which is found in developer settings).
 #define ADB "adb" // Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
 
@@ -49,6 +57,9 @@ DirectX::XMFLOAT4 drawColors[]
 
 #define MOUSE_MIN_DIST 2.0f // Distance for the pen position to move in monitor pixels before it updates the mouse position (maybe this helps performance IDK). Sometimes this setting is ignored.
 
+
+bool shifting = false;
+bool ctrling = false;
 
 #define BATCH 8 // How many events are received at once (maybe this can marginally affect smoothness as the receiving thread makes this batch available immediately before reading more in case a lot arrived at once. IDK.). The android app has a corresponding setting. Probably not so important.
 
@@ -311,7 +322,6 @@ std::vector<char> data1;
 
 bool paused = true;
 
-bool ctrling = false;
 bool running = true;
 bool clear = false;
 void Update()
@@ -355,10 +365,13 @@ void Update()
 
 			float pressure = *((float*)b + 4);
 
+			bool nextInitialize = false;
+
 			int type = CONTINUE;
 			static bool down = false;
 			if (inputType == INPUT_UP)
 			{
+				nextInitialize = true;
 				if (down)
 				{
 					down = false;
@@ -390,9 +403,6 @@ void Update()
 			else if (inputType == INPUT_DRAW)
 				erasing = false;
 
-			if (type != CONTINUE || down)
-				points.push_back({ x, y, (float)type, pressure });
-
 			//std::cerr << type << " - Point: " << x << ", " << y << ", pressure: " << pressure << std::endl;
 
 			static float prevx, prevy;
@@ -402,18 +412,58 @@ void Update()
 
 			loc += 5 * 4;
 
-			if (dist > MOUSE_MIN_DIST || loc >= data1.size() || type != 0)
+			static bool initialize = true;
+			if (initialize)
 			{
 				prevx = x;
 				prevy = y;
-				x *= 65535;
-				y *= 65535;
+			}
+			initialize = nextInitialize;
+
+			float xpos = x;
+			float ypos = y;
+
+			if (shifting || dist > MOUSE_MIN_DIST || loc >= data1.size() || type != CONTINUE)
+			{
+				if (shifting)
+				{
+					x = xpos - prevx;
+					y = ypos - prevy;
+					prevx = xpos;
+					prevy = ypos;
+				}
+				else
+				{
+					prevx = x;
+					prevy = y;
+				}
+
+				if (shifting)
+				{
+					static float extraX = 0.0f, extraY = 0.0f;
+					x *= SHIFTING_SENSITIVITY * SHIFTING_SENSITIVITY_X * width;
+					y *= SHIFTING_SENSITIVITY * SHIFTING_SENSITIVITY_Y * height;
+					float pixX = x + extraX;
+					float pixY = y + extraY;
+					x = round(pixX / MICKEY_FACTOR) * MICKEY_FACTOR;
+					y = round(pixY / MICKEY_FACTOR) * MICKEY_FACTOR;
+					extraX = pixX - x;
+					extraY = pixY - y;
+					x /= width;
+					y /= height;
+				}
+				else
+				{
+					x *= 65535;
+					y *= 65535;
+				}
 
 				int xx = (int)x;
 				int yy = (int)y;
 
-				UINT flags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE;
-
+				UINT flags = MOUSEEVENTF_MOVE;
+				if (!shifting)
+					flags |= MOUSEEVENTF_ABSOLUTE;
 				if (clickMouse)
 				{
 					if (type == 1)
@@ -422,6 +472,18 @@ void Update()
 						flags |= MOUSEEVENTF_LEFTUP;
 				}
 				mouse_event(flags, xx, yy, 0, 0);
+			}
+
+			if (type != CONTINUE || down)
+			{
+				if (shifting)
+				{
+					POINT point;
+					GetCursorPos(&point);
+					points.push_back({ point.x / (float)width, point.y / (float)height, (float)type, pressure });
+				}
+				else
+					points.push_back({ xpos, ypos, (float)type, pressure });
 			}
 		}
 
@@ -578,10 +640,47 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 		KBDLLHOOKSTRUCT* pKeyInfo = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
 		if (pKeyInfo->vkCode == VK_CONTROL || pKeyInfo->vkCode == VK_LCONTROL || pKeyInfo->vkCode == VK_RCONTROL)
 		{
-			if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
-				ctrling = true;
-			else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
-				ctrling = false;
+			if (TOGGLE_CONTROL)
+			{
+				static bool down = false;
+				if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+				{
+					if (!down)
+						ctrling = !ctrling;
+					down = true;
+				}
+				else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+					down = false;
+			}
+			else
+			{
+				if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+					ctrling = true;
+				else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+					ctrling = false;
+			}
+		}
+		if (pKeyInfo->vkCode == VK_SHIFT || pKeyInfo->vkCode == VK_LSHIFT || pKeyInfo->vkCode == VK_RSHIFT)
+		{
+			if (TOGGLE_SHIFT)
+			{
+				static bool down = false;
+				if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+				{
+					if (!down)
+						shifting = !shifting;
+					down = true;
+				}
+				else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+					down = false;
+			}
+			else
+			{
+				if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)
+					shifting = true;
+				else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+					shifting = false;
+			}
 		}
 		if (pKeyInfo->vkCode == CLEAR_KEY && wParam == WM_KEYDOWN)
 		{
