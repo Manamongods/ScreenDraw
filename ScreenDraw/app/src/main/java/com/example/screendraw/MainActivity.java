@@ -37,60 +37,72 @@ public class MainActivity extends AppCompatActivity {
     private WifiP2pManager.Channel channel;
     private Handler handler = new Handler(Looper.getMainLooper());
 
-    boolean down = false;
-    View.OnTouchListener onTouchListener = new View.OnTouchListener() {
-        @Override
-        public boolean onTouch(View v, MotionEvent event) {
-            int toolType = event.getToolType(0);
-            boolean erase = false;
-            if (toolType == MotionEvent.TOOL_TYPE_STYLUS)
-                erase = false;
-            else if (toolType == MotionEvent.TOOL_TYPE_ERASER)
-                erase = true;
-            else if (toolType == MotionEvent.TOOL_TYPE_FINGER)
-                return true;
+    public boolean onTouchOrHover(View v, MotionEvent event) {
+        int toolType = event.getToolType(0);
+        boolean erase = false;
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS)
+            erase = false;
+        else if (toolType == MotionEvent.TOOL_TYPE_ERASER)
+            erase = true;
+        else if (toolType == MotionEvent.TOOL_TYPE_FINGER)
+            return true;
 
-            int pointerIndex = event.getActionIndex();
-            int viewWidth = v.getWidth();
-            int viewHeight = v.getHeight();
+        int pointerIndex = event.getActionIndex();
+        int viewWidth = v.getWidth();
+        int viewHeight = v.getHeight();
 
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_MOVE:
-                    int historySize = event.getHistorySize(); // Get the history size
-                    for (int i = 0; i < historySize; i++) {
-                        Data d = new Data();
-                        d.x = event.getHistoricalX(pointerIndex, i) / viewWidth;
-                        d.y = event.getHistoricalY(pointerIndex, i) / viewHeight;
-                        d.type = erase ? 2 : 1;
-                        d.pressure = event.getHistoricalPressure(pointerIndex, i);
-                        try {
-                            toSend.put(d);
-                        } catch (InterruptedException e) {
-                            Log.d(TAG, "Wtf it failed idk??? " + e);
-                        }
-                    }
-                    // (Note there's no break; here)
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_DOWN:
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_MOVE:
+                int historySize = event.getHistorySize(); // Get the history size
+                for (int i = 0; i < historySize; i++) {
                     Data d = new Data();
-                    d.x = event.getX() / viewWidth;
-                    d.y = event.getY() / viewHeight;
-                    if (event.getActionMasked() == MotionEvent.ACTION_UP)
-                        d.type = 0;
-                    else
-                        d.type = erase ? 2 : 1;
-                    d.pressure = event.getPressure();
+                    d.x = event.getHistoricalX(pointerIndex, i) / viewWidth;
+                    d.y = event.getHistoricalY(pointerIndex, i) / viewHeight;
+                    d.type = erase ? 2 : 1;
+                    d.pressure = event.getHistoricalPressure(pointerIndex, i);
                     try {
                         toSend.put(d);
                     } catch (InterruptedException e) {
                         Log.d(TAG, "Wtf it failed idk??? " + e);
                     }
-                    break;
-                default:
-                    break;
-            }
+                }
+                // (Note there's no break; here)
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_DOWN:
+                Data d = new Data();
+                d.x = event.getX() / viewWidth;
+                d.y = event.getY() / viewHeight;
+                if (event.getActionMasked() == MotionEvent.ACTION_UP)
+                    d.type = 0;
+                else
+                    d.type = erase ? 2 : 1;
+                d.pressure = event.getPressure();
+                try {
+                    toSend.put(d);
+                } catch (InterruptedException e) {
+                    Log.d(TAG, "Wtf it failed idk??? " + e);
+                }
+                break;
+            default:
+                break;
+        }
 
-            return true;
+        return true;
+    }
+
+    boolean down = false;
+    View.OnTouchListener onTouchListener = new View.OnTouchListener() {
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            return onTouchOrHover(v, event);
+        }
+    };
+
+    // This doesn't seem to work IDK why:
+    View.OnHoverListener onHoverListener = new View.OnHoverListener() {
+        @Override
+        public boolean onHover(View v, MotionEvent event) {
+            return onTouchOrHover(v, event);
         }
     };
 
@@ -147,6 +159,8 @@ public class MainActivity extends AppCompatActivity {
 
             surfaceView.setVisibility(View.VISIBLE);
             surfaceView.setOnTouchListener(onTouchListener);
+            // This doesn't seem to work IDK why:
+            surfaceView.setOnHoverListener(onHoverListener);
 
             Thread t = new Thread(new Sending());
             t.setPriority(10);

@@ -10,8 +10,8 @@ const float keyEraseSize = 100.0f; // Size of eraser when holding ERASE_KEY
 
 float downThreshold = 0.45f; // Pressure threshold to activate drawing/erasing
 float upThreshold = 0.25f; // Pressure threshold to deactivate drawing/erasing
-float ctrlDownThreshold = -1.0f; // Down threshold when a ctrl key is held
-float ctrlUpThreshold = -1.0f; // Up threshold when a ctrl key is held
+float ctrlDownThreshold = 0.0f; // Down threshold when a ctrl key is held
+float ctrlUpThreshold = 0.0f; // Up threshold when a ctrl key is held
 
 // Note that if you want to change these to non alphanumeric keys, you need to use the VK_ defines found in WinUser.h such as: VK_SHIFT, VK_TAB, VK_F1, etc.
 #define CLEAR_KEY 'Q'
@@ -369,7 +369,7 @@ void Update()
 			{
 				if (down)
 				{
-					if (pressure < (ctrling ? ctrlUpThreshold : upThreshold))
+					if (pressure <= (ctrling ? ctrlUpThreshold : upThreshold))
 					{
 						down = false;
 						type = UP;
