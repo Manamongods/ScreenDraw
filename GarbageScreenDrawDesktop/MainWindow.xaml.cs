@@ -218,7 +218,7 @@ namespace ScreenDrawDesktop
                                         //    flags |= UP;
                                         mouse_event(flags, xx, yy, 0, 0);
 
-                                        Thread.Sleep(TimeSpan.FromTicks(100));
+                                        //Thread.Sleep(TimeSpan.FromTicks(10));
                                     }
                                 }
                                 if (points.Count > MIN_POINTS * 2 || (points.Count > 0 && !stream.DataAvailable))

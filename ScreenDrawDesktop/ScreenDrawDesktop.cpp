@@ -26,7 +26,7 @@ float ctrlUpThreshold = 0.0f; // Up threshold when a ctrl key is held
 #define SHIFTING_SENSITIVITY 5000 // Sensitivity for relative movement when shift key is held/toggled
 #define SHIFTING_SENSITIVITY_X 1.0f // These can be used to make the delta movement unaffected by the aspect ratio difference between the android screen and monitor (if you plan to use both absolute and relative, it's probably better to not)
 #define SHIFTING_SENSITIVITY_Y 1.0f
-#define MICKEY_FACTOR 2000 // Probably a bad way to do it, but the problem is when moving the mouse, it will snap to pixel coordinates (integers) and will lose small movements, so my code accumulates them, but I don't know if there's a way to convert from input to resulting mouse movement, so this does something idk.
+#define MICKEY_FACTOR 4000 // Probably a bad way to do it, but the problem is when moving the mouse, it will snap to pixel coordinates (integers) and will lose small movements, so my code accumulates them, but I don't know if there's a way to convert from input to resulting mouse movement, so this does something idk.
 
 #define USE_USB true // If this is false, then it is much less smooth (using Wi-Fi Direct). But if true your android device needs to be connected with USB and have USB Debugging enabled (which is found in developer settings).
 #define ADB "adb" // Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
