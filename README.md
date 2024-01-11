@@ -2,6 +2,9 @@ Designed for my specific needs, so the user settings for the windows server (Scr
 ![Settings](Settings.PNG)
 and then recompiling (should be as easy as pressing f6 or f5 with ScreenDrawDesktop.sln open in Visual Studio (2019 at least)).
 
+Devlog:
+[![Devlog](https://img.youtube.com/vi/j4yxaRFqkBA/0.jpg)](https://www.youtube.com/watch?v=j4yxaRFqkBA)
+
 GarbageScreenDrawDesktop is as its name implies, pure garbage. I wanted to try WPF out but the performance was trash, so then I tried Windows Desktop Application ( which works much better :) ).
 
 [![ko-fi](https://i.imgur.com/eYDOLTJ.png)](https://ko-fi.com/Z8Z3S9FJ5)
