@@ -51,15 +51,17 @@ public class MainActivity extends AppCompatActivity {
         int viewWidth = v.getWidth();
         int viewHeight = v.getHeight();
 
-        switch (event.getActionMasked()) {
+        int a = event.getActionMasked();
+        switch (a) {
             case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_HOVER_MOVE:
                 int historySize = event.getHistorySize(); // Get the history size
                 for (int i = 0; i < historySize; i++) {
                     Data d = new Data();
                     d.x = event.getHistoricalX(pointerIndex, i) / viewWidth;
                     d.y = event.getHistoricalY(pointerIndex, i) / viewHeight;
                     d.type = erase ? 2 : 1;
-                    d.pressure = event.getHistoricalPressure(pointerIndex, i);
+                    d.pressure = a == MotionEvent.ACTION_HOVER_MOVE ? 0 : event.getHistoricalPressure(pointerIndex, i);
                     try {
                         toSend.put(d);
                     } catch (InterruptedException e) {
@@ -70,13 +72,13 @@ public class MainActivity extends AppCompatActivity {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_DOWN:
                 Data d = new Data();
-                d.x = event.getX() / viewWidth;
-                d.y = event.getY() / viewHeight;
+                d.x = event.getX(pointerIndex) / viewWidth;
+                d.y = event.getY(pointerIndex) / viewHeight;
                 if (event.getActionMasked() == MotionEvent.ACTION_UP)
                     d.type = 0;
                 else
                     d.type = erase ? 2 : 1;
-                d.pressure = event.getPressure();
+                d.pressure = a == MotionEvent.ACTION_HOVER_MOVE ? 0 : event.getPressure();
                 try {
                     toSend.put(d);
                 } catch (InterruptedException e) {
@@ -98,7 +100,6 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    // This doesn't seem to work IDK why:
     View.OnHoverListener onHoverListener = new View.OnHoverListener() {
         @Override
         public boolean onHover(View v, MotionEvent event) {
@@ -159,7 +160,6 @@ public class MainActivity extends AppCompatActivity {
 
             surfaceView.setVisibility(View.VISIBLE);
             surfaceView.setOnTouchListener(onTouchListener);
-            // This doesn't seem to work IDK why:
             surfaceView.setOnHoverListener(onHoverListener);
 
             Thread t = new Thread(new Sending());

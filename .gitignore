@@ -33,3 +33,4 @@ ScreenDrawDesktop/x64/Release/*
 GarbageScreenDrawDesktop/bin/Debug/net5.0-windows/*
 !GarbageScreenDrawDesktop/bin/Debug/net5.0-windows/ScreenDrawDesktop.exe
 release - Shortcut.lnk
+ScreenDraw/app/src/main/res/drawable/.idea/workspace.xml

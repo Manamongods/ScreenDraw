@@ -8,8 +8,8 @@ const float drawSize1 = 4.0f; // Draw size at pressure 100%
 const float eraseSize = 200.0f; // Size of eraser when using the eraser button on your stylus
 const float keyEraseSize = 100.0f; // Size of eraser when holding ERASE_KEY
 
-float downThreshold = 0.45f; // Pressure threshold to activate drawing/erasing
-float upThreshold = 0.25f; // Pressure threshold to deactivate drawing/erasing
+float downThreshold = 0.001f; // 0.45f; // Pressure threshold to activate drawing/erasing
+float upThreshold = 0.0001f; // 0.25f; // Pressure threshold to deactivate drawing/erasing
 float ctrlDownThreshold = 0.0f; // Down threshold when a ctrl key is held
 float ctrlUpThreshold = 0.0f; // Up threshold when a ctrl key is held
 
@@ -42,7 +42,7 @@ DirectX::XMFLOAT4 drawColors[]
 	{0.0f,1.0f,0.0f,1.0f}, // Green
 	{0.0f,0.0f,1.0f,1.0f}, // Blue
 	{0.0f,0.0f,0.0f,1.0f}, // Black
-	{1.0f,1.0f,254.0f/255.0f,1.0f}, // White (Not quite though because pure white is used for ScreenDraw's color key for transparency (because white seems to be the default window color or something))
+	{1.0f,1.0f,254.0f / 255.0f,1.0f}, // White (Not quite though because pure white is used for ScreenDraw's color key for transparency (because white seems to be the default window color or something))
 };
 
 // These remap and crop a rectangle inside the android device's screen to the normalized x=0 to x=1 and y=0 to y=1 ranges of the computer screen. 
@@ -329,9 +329,10 @@ void Update()
 	//std::cerr << "Update" << std::endl;
 
 	data0Mutex.lock();
-	data1.resize(data0.size());
-	memcpy(data1.data(), data0.data(), data0.size());
-	data0.clear();
+	int bytes = data0.size() / (5 * 4) * (5 * 4);
+	data1.resize(bytes);
+	memcpy(data1.data(), data0.data(), bytes);
+	data0.erase(data0.begin(), data0.begin() + bytes);
 	data0Mutex.unlock();
 
 	bool presented = false;
@@ -342,7 +343,10 @@ void Update()
 
 		int loc = 0;
 		while (loc < ((int)data1.size() - 3) && (*((int*)(data1.data() + loc)) != 478934687))
+		{
+			std::cerr << "?????????????" << std::endl;
 			loc++;
+		}
 		while (loc < (int)data1.size() - 5 * 4 + 1)
 		{
 			char* b = data1.data() + loc;
