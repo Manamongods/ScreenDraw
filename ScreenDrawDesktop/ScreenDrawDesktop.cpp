@@ -29,7 +29,7 @@ float ctrlUpThreshold = 0.0f; // Up threshold when a ctrl key is held
 #define MICKEY_FACTOR 4000 // Probably a bad way to do it, but the problem is when moving the mouse, it will snap to pixel coordinates (integers) and will lose small movements, so my code accumulates them, but I don't know if there's a way to convert from input to resulting mouse movement, so this does something idk.
 
 #define USE_USB true // If this is false, then it is much less smooth (using Wi-Fi Direct). But if true your android device needs to be connected with USB and have USB Debugging enabled (which is found in developer settings).
-#define ADB "adb" // Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
+#define ADB "adb -d" // The "-d" makes it ignore emulators. Used for adb port reversing (the opposite of port forwarding). Alternatively if you haven't added it to PATH, something like: "\"C:\\Users\\YOUR_USER_NAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe\""
 
 #define LOCAL_PORT 8987 // The port on this PC. When using Wi-Fi direct (not USB debugging (when USE_USB is false)), this should then match the port text field in the android device.
 #define REMOTE_PORT 8987 // Used when USE_USB is true (and pressing the usb button in android), and in that case it should match the port text field in the android device.

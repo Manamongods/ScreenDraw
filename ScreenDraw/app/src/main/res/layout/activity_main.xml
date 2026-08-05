@@ -47,8 +47,8 @@
             android:text="Connect using Wi-Fi Direct (This is much choppier than USB)" />
     </RelativeLayout>
 
-    <com.example.screendraw.HoverView
-        android:id="@+id/hoverView"
+    <View
+        android:id="@+id/view"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 

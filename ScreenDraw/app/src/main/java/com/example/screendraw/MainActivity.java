@@ -6,6 +6,7 @@ import android.os.Bundle;
 import java.io.OutputStream;
 import java.io.DataOutputStream;
 import android.content.Context;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
 import android.util.Log;
@@ -15,7 +16,6 @@ import android.os.Looper;
 import java.net.Socket;
 import java.util.concurrent.LinkedBlockingQueue;
 import android.content.SharedPreferences;
-import android.os.Bundle;
 import android.widget.Button;
 import android.widget.EditText;
 import java.net.SocketAddress;
@@ -118,8 +118,8 @@ public class MainActivity extends AppCompatActivity {
         wifiP2pManager = (WifiP2pManager) getSystemService(Context.WIFI_P2P_SERVICE);
         channel = wifiP2pManager.initialize(this, getMainLooper(), null);
 
-        HoverView surfaceView = findViewById(R.id.hoverView);
-        surfaceView.setVisibility(View.GONE);
+        view = findViewById(R.id.view);
+        view.setVisibility(View.GONE);
 
         View decorView = getWindow().getDecorView();
         int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -158,9 +158,9 @@ public class MainActivity extends AppCompatActivity {
             button.setVisibility(View.GONE);
             usbButton.setVisibility(View.GONE);
 
-            surfaceView.setVisibility(View.VISIBLE);
-            surfaceView.setOnTouchListener(onTouchListener);
-            surfaceView.setOnHoverListener(onHoverListener);
+            view.setVisibility(View.VISIBLE);
+            view.setOnTouchListener(onTouchListener);
+            view.setOnHoverListener(onHoverListener);
 
             Thread t = new Thread(new Sending());
             t.setPriority(10);
@@ -174,6 +174,9 @@ public class MainActivity extends AppCompatActivity {
         float x, y, pressure;
     }
     LinkedBlockingQueue<Data> toSend = new LinkedBlockingQueue<Data>();
+
+    View view;
+    private long lastInvalidateTime = 0;
 
     private class Sending implements Runnable {
         private float prevx = 0, prevy = 0;
@@ -219,6 +222,14 @@ public class MainActivity extends AppCompatActivity {
                             }
                             dataOutputStream.flush();
                         }
+
+                        // Tells android that stuff's going on so it shouldn't start batching input events a few seconds after launching
+                        long now = SystemClock.uptimeMillis();
+                        if (now - lastInvalidateTime >= 1000) {
+                            lastInvalidateTime = now;
+                            view.invalidate();
+                        }
+
                         try {
                             Thread.sleep(1);
                         } catch (InterruptedException e) {
